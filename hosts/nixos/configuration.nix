@@ -39,6 +39,7 @@
   };
 
   services.printing.enable = true;
+  services.fwupd.enable = true;
   services.pulseaudio.enable = false;
   security.rtkit.enable = true;
   services.pipewire = {
@@ -59,6 +60,16 @@
 
   programs.firefox.enable = true;
   nixpkgs.config.allowUnfree = true;
+
+  environment.systemPackages = with pkgs; [
+    codex
+    git
+    jq
+    nixfmt
+    pciutils
+    ripgrep
+    usbutils
+  ];
 
   nix.settings.experimental-features = [
     "nix-command"
