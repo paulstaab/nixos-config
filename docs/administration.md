@@ -20,6 +20,12 @@ and credentials remain in the user's private state: they are not declared by
 Home Manager, copied to the Nix store, or committed to this repository. Never
 place tokens in Nix expressions or tracked environment files.
 
+Codex is selected from the separately pinned `codex-nixpkgs` flake input so it
+can track stable upstream releases without updating the workstation's main
+package set. Updating that input changes only Codex and its runtime closure.
+Existing authentication, settings, and sessions under the user's private state
+remain outside Nix and survive upgrades and rollbacks.
+
 `fwupd` is enabled for hardware inventory and firmware diagnostics. Do not run a
 firmware update without explicit approval.
 

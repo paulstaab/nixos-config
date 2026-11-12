@@ -1,4 +1,8 @@
-{ pkgs, ... }:
+{
+  pkgs,
+  codex-nixpkgs,
+  ...
+}:
 
 {
   imports = [
@@ -62,7 +66,7 @@
   nixpkgs.config.allowUnfree = true;
 
   environment.systemPackages = with pkgs; [
-    codex
+    codex-nixpkgs.legacyPackages.${pkgs.stdenv.hostPlatform.system}.codex
     git
     jq
     nixfmt
