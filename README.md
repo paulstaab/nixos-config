@@ -3,8 +3,10 @@
 Declarative configuration for Paul's Dell XPS 15 9530, named `xenon`. The host
 output is `nixosConfigurations.xenon`.
 
-The initial flake deliberately mirrors the graphical installer's configuration.
-It adds Home Manager integration but does not yet manage user files or packages.
+The flake builds on the graphical installer's configuration. Home Manager
+installs Paul's desktop applications and manages the default browser.
 
 See [docs/administration.md](docs/administration.md) for the validation workflow
 and [docs/recovery.md](docs/recovery.md) before activating a change.
+See [docs/desktop-applications.md](docs/desktop-applications.md) for first-run
+instructions.

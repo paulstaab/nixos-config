@@ -44,6 +44,7 @@
 
   services.printing.enable = true;
   services.fwupd.enable = true;
+  services.tailscale.enable = true;
   services.pulseaudio.enable = false;
   security.rtkit.enable = true;
   services.pipewire = {
@@ -63,7 +64,6 @@
   };
 
   programs.firefox.enable = true;
-  nixpkgs.config.allowUnfree = true;
 
   environment.systemPackages = with pkgs; [
     codex-nixpkgs.legacyPackages.${pkgs.stdenv.hostPlatform.system}.codex
