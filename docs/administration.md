@@ -27,8 +27,8 @@ firmware update without explicit approval.
 
 ```console
 nix flake check
-nix build .#nixosConfigurations.nixos.config.system.build.toplevel
-sudo nixos-rebuild dry-activate --flake .#nixos
+nix build .#nixosConfigurations.xenon.config.system.build.toplevel
+sudo nixos-rebuild dry-activate --flake .#xenon
 ```
 
 The build command creates a local `result` symlink, which is ignored by Git. A
@@ -42,9 +42,9 @@ After approval, first re-run validation and then temporarily activate:
 
 ```console
 nix flake check
-nix build .#nixosConfigurations.nixos.config.system.build.toplevel
-sudo nixos-rebuild dry-activate --flake .#nixos
-sudo nixos-rebuild test --flake .#nixos
+nix build .#nixosConfigurations.xenon.config.system.build.toplevel
+sudo nixos-rebuild dry-activate --flake .#xenon
+sudo nixos-rebuild test --flake .#xenon
 ```
 
 Test login, GNOME, Wi-Fi, audio, graphics, external displays, suspend, and any
@@ -52,7 +52,7 @@ Home Manager-managed files. Do not test hibernation as part of this migration.
 If the temporary activation works, request approval before making it persistent:
 
 ```console
-sudo nixos-rebuild switch --flake .#nixos
+sudo nixos-rebuild switch --flake .#xenon
 ```
 
 Reboot testing is a separate step. A successful build does not prove runtime

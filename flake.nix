@@ -13,10 +13,10 @@
   outputs =
     { nixpkgs, home-manager, ... }:
     {
-      nixosConfigurations.nixos = nixpkgs.lib.nixosSystem {
+      nixosConfigurations.xenon = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
-          ./hosts/nixos/configuration.nix
+          ./hosts/xenon/configuration.nix
           home-manager.nixosModules.home-manager
           {
             home-manager.users.paul = import ./home/paul.nix;
@@ -25,4 +25,3 @@
       };
     };
 }
-

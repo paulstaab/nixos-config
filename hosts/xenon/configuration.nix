@@ -14,7 +14,7 @@
   boot.initrd.luks.devices."luks-313af177-0457-49cd-a58e-9bf51024b8b3".device =
     "/dev/disk/by-uuid/313af177-0457-49cd-a58e-9bf51024b8b3";
 
-  networking.hostName = "nixos";
+  networking.hostName = "xenon";
   networking.networkmanager.enable = true;
 
   time.timeZone = "Europe/Berlin";
