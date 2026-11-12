@@ -1,5 +1,9 @@
 # Rollback and recovery
 
+For a failed SSD replaced with a blank disk, use
+[Bare-metal reinstall](bare-metal-reinstall.md). The procedures below assume
+the existing installation and storage still exist.
+
 ## Before activation
 
 Record the current generation and confirm its store path still exists:
