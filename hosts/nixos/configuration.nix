@@ -60,7 +60,11 @@
   programs.firefox.enable = true;
   nixpkgs.config.allowUnfree = true;
 
+  nix.settings.experimental-features = [
+    "nix-command"
+    "flakes"
+  ];
+
   # Never change this during routine upgrades.
   system.stateVersion = "26.05";
 }
-

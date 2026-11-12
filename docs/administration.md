@@ -1,6 +1,8 @@
 # Administration workflow
 
 Run commands from the repository root. No activation is implied by validation.
+The host configuration enables `nix-command` and `flakes` globally through
+`nix.settings.experimental-features`.
 
 ## Validate
 
@@ -50,4 +52,3 @@ runtime state, privileged Btrfs subvolume enumeration, systemd-boot files on the
 ESP, or EFI boot entries. Those denials were assessment sandbox restrictions,
 not diagnosed workstation failures. Privileged read-only checks should be run on
 the host before the first activation where they are relevant.
-
