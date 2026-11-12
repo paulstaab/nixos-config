@@ -3,9 +3,30 @@
 This repository is the source of truth for the NixOS workstation named `nixos`.
 Agents must leave it in a state another fresh session can understand and verify.
 
+## Agent-first administration policy
+
+Codex may autonomously inspect and edit configuration files, run non-privileged
+validation and builds, and create local Git commits. Prefer declarative, minimal,
+reversible changes. Validate and commit configuration changes before requesting
+activation.
+
+Explicit user approval is required before:
+
+- Activating a system configuration with `nixos-rebuild test` or `switch`.
+- Running privileged commands that modify system state.
+- Rebooting or shutting down the workstation.
+- Updating firmware.
+- Changing disks, partitions, filesystems, encryption, boot configuration, or
+  sudo permissions.
+- Deleting system generations or performing destructive garbage collection.
+- Pushing changes to a remote repository.
+
+Do not configure passwordless sudo or any alternative privilege-escalation
+mechanism.
+
 ## Safety boundaries
 
-- Prefer declarative, reviewable, reversible changes.
+- Prefer declarative, minimal, reviewable, reversible changes.
 - Never access, display, copy, or commit credentials, passwords, private keys,
   tokens, recovery keys, or other secrets.
 - Do not change partitioning, filesystems, Btrfs subvolumes, LUKS, swap,
@@ -26,8 +47,8 @@ Agents must leave it in a state another fresh session can understand and verify.
 1. Read this file, `README.md`, and the relevant files under `docs/`.
 2. Inspect the worktree and preserve unrelated user changes.
 3. Make the smallest declarative change that fulfills the request.
-4. Run parse/evaluation checks, `nix flake check`, and build
-   `.#nixosConfigurations.nixos.config.system.build.toplevel`.
+4. For configuration changes, run parse/evaluation checks, `nix flake check`,
+   and build `.#nixosConfigurations.nixos.config.system.build.toplevel`.
 5. Review the activation diff and state what still requires runtime testing.
 6. Confirm that a known-good system generation remains available.
 7. Stop before activation unless the owner explicitly approved activation.
@@ -44,4 +65,3 @@ Home Manager activation can replace user files or expose ownership conflicts.
 Before adding a managed file, inspect only its path, type, ownership, and whether
 it exists; do not read potentially secret contents unless explicitly necessary
 and authorized. Prefer an explicit migration or backup plan over forced writes.
-
