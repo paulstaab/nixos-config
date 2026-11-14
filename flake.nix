@@ -2,7 +2,7 @@
   description = "Paul's Dell XPS 15 NixOS configuration";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/ac588ef1c914865dad517b337ea0eb9694a4021c";
+    nixpkgs.url = "github:NixOS/nixpkgs/f1e5c356f35d07e7b71a6b5e6c9338e0b029e0c0";
 
     # Keep Codex current without updating the workstation's package set.
     codex-nixpkgs.url = "github:NixOS/nixpkgs/3730a4017d0f44c3a09faa593269bcbddae1fa18";

@@ -1,16 +1,5 @@
 { lib, pkgs, ... }:
 
-let
-  # Pinned VS Code 1.144.0 moved its bundled ripgrep. Keep the upstream
-  # packaging steps, but replace the binary at the archive's actual path.
-  vscodeDesktop = pkgs.vscode.overrideAttrs (old: {
-    postPatch =
-      lib.replaceStrings
-        [ "resources/app/node_modules/@vscode/ripgrep/bin/rg" ]
-        [ "resources/app/node_modules.asar.unpacked/@vscode/ripgrep-universal/bin/linux-x64/rg" ]
-        old.postPatch;
-  });
-in
 {
   home.username = "paul";
   home.homeDirectory = "/home/paul";
@@ -24,7 +13,7 @@ in
   nixpkgs.config.allowUnfreePredicate = pkg: lib.getName pkg == "vscode";
 
   home.packages = with pkgs; [
-    vscodeDesktop
+    vscode
     # Includes libcloudproviders support for GNOME Files. Launch manually;
     # the Home Manager service would start the client at graphical login.
     nextcloud-client
