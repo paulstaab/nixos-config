@@ -66,9 +66,10 @@ functionality.
 
 ## Updating inputs
 
-Input updates can change the entire system and require their own review and
-build. Update one input deliberately; do not use an unreviewed blanket update.
-Keep Home Manager on the release matching NixOS and following the same nixpkgs.
+Follow [updates.md](updates.md) and `scripts/update-workflow` for separate
+`system` and `codex` maintenance. Capture a clean baseline, select explicit
+revisions, validate the complete closure, review the report, and commit locally
+before requesting activation. Never use a blanket input update.
 
 ## Current sandbox limitations
 

@@ -10,3 +10,6 @@ See [docs/administration.md](docs/administration.md) for the validation workflow
 and [docs/recovery.md](docs/recovery.md) before activating a change.
 See [docs/desktop-applications.md](docs/desktop-applications.md) for first-run
 instructions.
+
+See [docs/updates.md](docs/updates.md) for separate system and Codex updates,
+validation reports, approval boundaries, runtime tests, and rollback.

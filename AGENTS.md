@@ -65,3 +65,20 @@ Home Manager activation can replace user files or expose ownership conflicts.
 Before adding a managed file, inspect only its path, type, ownership, and whether
 it exists; do not read potentially secret contents unless explicitly necessary
 and authorized. Prefer an explicit migration or backup plan over forced writes.
+
+## Routine updates
+
+Follow [docs/updates.md](docs/updates.md) for every maintenance update. Use
+`scripts/update-workflow prepare|validate system|codex /absolute/report-directory`.
+Start clean; capture a baseline before editing inputs. `system` updates only
+nixpkgs on nixos-26.05 plus Home Manager release-26.05. `codex` updates only the
+separately pinned codex-nixpkgs to a verified stable upstream Codex release.
+Preserve explicit revision pins, unrelated lock nodes, state versions, and all
+system generations. Never silently move release branches.
+
+Review input/version, closure, kernel/initrd, boot/encryption, and service diffs;
+record provenance, validation, risks, and pending runtime tests in a focused
+local commit. The helper does not replace agent review or upstream verification.
+Stop after committing and report the result. Temporary activation, permanent
+activation, reboot, firmware updates, and remote pushes each require explicit
+owner approval. No scheduled updates or unattended activation are authorized.

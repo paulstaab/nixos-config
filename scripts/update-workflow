@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# Read docs/updates.md before use. This helper never updates or activates inputs.
+set -euo pipefail
+umask 077
+cd "$(git rev-parse --show-toplevel)"
+action=${1:-help}
+mode=${2:-}
+report=${3:-}
+if [[ $action == help || $# != 3 || ! $mode =~ ^(system|codex)$ || ! $action =~ ^(prepare|validate)$ ]]; then
+  echo 'Usage: scripts/update-workflow prepare|validate system|codex /absolute/report-directory'
+  [[ $action == help ]]
+  exit
+fi
+report=$(realpath -m -- "$report")
+[[ $report == /* && $report != "$PWD" && $report != "$PWD/"* ]] || { echo 'Use a report directory outside the repository.' >&2; exit 1; }
+snapshot() {
+  nix eval --no-update-lock-file --json .#nixosConfigurations.xenon.config --apply '
+    c: {
+      release = c.system.nixos.release;
+      kernel = c.boot.kernelPackages.kernel.version;
+      initrd = c.system.build.initialRamdisk.drvPath;
+      kernelPath = c.system.build.kernel.drvPath;
+      boot = { inherit (c.boot) kernelParams resumeDevice supportedFilesystems;
+        inherit (c.boot.initrd) availableKernelModules kernelModules;
+        luks = builtins.mapAttrs (_: d: {
+          inherit (d) device allowDiscards bypassWorkqueues preLVM;
+        }) c.boot.initrd.luks.devices;
+        systemdBoot = c.boot.loader.systemd-boot.enable;
+        efiWrites = c.boot.loader.efi.canTouchEfiVariables;
+      };
+      services = builtins.attrNames c.systemd.services;
+      packages = map (p: { name = p.name or "unknown"; version = p.version or "unknown"; }) c.environment.systemPackages;
+      stateVersion = c.system.stateVersion;
+      homeStateVersion = c.home-manager.users.paul.home.stateVersion;
+    }' | jq -S .
+}
+if [[ $action == prepare ]]; then
+  [[ -z $(git status --porcelain --untracked-files=all) ]] || { echo 'Worktree must be clean.' >&2; exit 1; }
+  mkdir "$report"
+  git rev-parse HEAD > "$report/head"
+  printf '%s\n' "$mode" > "$report/mode"
+  cp flake.lock "$report/old-lock.json"
+  snapshot > "$report/old-config.json"
+  nix build --no-update-lock-file --out-link "$report/old-system" .#nixosConfigurations.xenon.config.system.build.toplevel
+  readlink -e /run/current-system > "$report/running-system"
+  find /nix/var/nix/profiles -maxdepth 1 -type l -name 'system-*-link' -exec readlink -e '{}' \; > "$report/generations"
+  grep -Fx -f "$report/running-system" "$report/generations" >/dev/null || { echo 'Running system has no retained generation; investigate before updating.' >&2; exit 1; }
+  echo "Baseline saved in $report. Follow docs/updates.md to select and edit inputs."
+  exit
+fi
+[[ $(cat "$report/head") == "$(git rev-parse HEAD)" && $(cat "$report/mode") == "$mode" ]]
+[[ -z $(git ls-files --others --exclude-standard) ]] || { echo 'Unexpected untracked files.' >&2; exit 1; }
+while IFS= read -r file; do
+  [[ $file == flake.nix || $file == flake.lock ]] || { echo "Unexpected change: $file" >&2; exit 1; }
+done < <(git diff HEAD --name-only)
+# Compare every node, including follows relationships and the root input mapping.
+if [[ $mode == system ]]; then allowed='["nixpkgs","home-manager"]'; else allowed='["codex-nixpkgs"]'; fi
+jq -e --argjson allowed "$allowed" --slurpfile old "$report/old-lock.json" '
+  . as $new | ($old[0]) as $old |
+  ($new.version == $old.version and $new.root == $old.root) and
+  (($new.nodes | keys) == ($old.nodes | keys)) and
+  ([($new.nodes | keys[]) as $k | select(($allowed | index($k)) == null) |
+      $new.nodes[$k] == $old.nodes[$k]] | all) and
+  .nodes["home-manager"].original.ref == "release-26.05" and
+  .nodes["home-manager"].inputs.nixpkgs == ["nixpkgs"]
+' flake.lock >/dev/null
+# Formatting check only: never rewrite files.
+nixfmt --check flake.nix
+git diff --check HEAD
+nix flake check --no-update-lock-file
+nix build --no-update-lock-file --out-link "$report/new-system" .#nixosConfigurations.xenon.config.system.build.toplevel
+snapshot > "$report/new-config.json"
+jq -e '.release == "26.05"' "$report/new-config.json" >/dev/null
+cp flake.lock "$report/new-lock.json"
+git diff HEAD -- flake.nix flake.lock > "$report/input.diff"
+# diff exit status 1 means differences; errors still fail.
+diff -u "$report/old-config.json" "$report/new-config.json" > "$report/config.diff" || [[ $? == 1 ]]
+nix store diff-closures "$report/old-system" "$report/new-system" > "$report/closure.diff"
+diff -ru --no-dereference "$report/old-system/etc/systemd/system" "$report/new-system/etc/systemd/system" > "$report/services.diff" || [[ $? == 1 ]]
+echo "Validation passed. Review $report, verify upstream provenance, summarize risks, then commit. No activation performed."
