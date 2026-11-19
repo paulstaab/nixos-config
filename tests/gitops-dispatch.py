@@ -10,6 +10,8 @@ import tempfile
 
 root = pathlib.Path(__file__).resolve().parents[1]
 real_git = shutil.which("git")
+if real_git is None:
+    raise SystemExit("git not found in PATH; dispatch fixtures require Git")
 with tempfile.TemporaryDirectory() as tmp:
     work = pathlib.Path(tmp)
     repo, bin_dir = work / "repo", work / "bin"
@@ -55,10 +57,24 @@ with tempfile.TemporaryDirectory() as tmp:
     (bin_dir / "gh").write_text('''#!/usr/bin/env python3
 import json, os, pathlib, sys
 args = sys.argv[1:]
-if args[:2] == ["pr", "list"]:
+if args[:2] == ["api", "--method"]:
+    # A fork PR (#3) has the same branch name. Only the owner-qualified
+    # selector finds canonical #2, or no PR when only the fork exists.
+    assert args[2:4] == ["GET", "repos/paulstaab/nixos-config/pulls"]
+    assert "state=open" in args and "base=main" in args
+    assert "head=paulstaab:automation/dependency-updates" in args
+    if os.environ.get("MULTIPLE_PRS"):
+        sys.exit(1)
     print("" if os.environ.get("NO_PR") else "2")
+elif args[:2] == ["pr", "list"]:
+    print("3")  # Regression: the old ambiguous selector picked the fork.
 elif args[0] == "api":
-    print(pathlib.Path(os.environ["METADATA"]).read_text())
+    data = json.loads(pathlib.Path(os.environ["METADATA"]).read_text())
+    if args[1].endswith("/3"):
+        data["head"]["repo"]["id"] = 123
+    else:
+        assert args[1] == "repos/paulstaab/nixos-config/pulls/2"
+    print(json.dumps(data))
 elif args[:2] == ["workflow", "run"]:
     pathlib.Path(os.environ["DISPATCH"]).write_text(json.dumps(args))
     sys.exit(int(os.environ.get("DISPATCH_FAILURE", "0")))
@@ -93,7 +109,8 @@ os.execv(os.environ["REAL_GIT"], [os.environ["REAL_GIT"], *sys.argv[1:]])
             assert args[args.index("--ref") + 1] == "automation/dependency-updates"
 
     check(metadata, True, True)
-    check(metadata, True, NO_PR="1")
+    check(metadata, True, NO_PR="1")  # Fork-only result must not target the fork.
+    check(metadata, False, MULTIPLE_PRS="1")
     check(metadata, False, True, DISPATCH_FAILURE="1")
     check(metadata, False, GITHUB_REF="refs/pull/2/merge")
     for section, key, value in [

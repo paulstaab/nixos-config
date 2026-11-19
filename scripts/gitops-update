@@ -41,7 +41,10 @@ fi
 remote_git \
   push --force-with-lease="refs/heads/$branch:$remote" origin "HEAD:refs/heads/$branch"
 unset header
-pr=$(gh pr list --repo "$GITHUB_REPOSITORY" --base main --head "$branch" --state open --json number --jq '.[0].number // empty')
+owner=${GITHUB_REPOSITORY%%/*}
+pr=$(gh api --method GET "repos/$GITHUB_REPOSITORY/pulls" \
+  -f state=open -f base=main -f "head=$owner:$branch" \
+  --jq 'if length > 1 then error("Multiple canonical update PRs") else .[0].number // empty end')
 if [[ -z $pr ]]; then
   gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
     --title 'Daily NixOS 26.05 and Home Manager update' \

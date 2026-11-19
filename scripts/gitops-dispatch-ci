@@ -5,7 +5,10 @@ base=${1:?base SHA required}
 [[ $base =~ ^[0-9a-f]{40}$ ]]
 [[ ${GITHUB_REPOSITORY:-} == paulstaab/nixos-config && ${GITHUB_REF:-} == refs/heads/main ]]
 branch=automation/dependency-updates
-pr=$(gh pr list --repo "$GITHUB_REPOSITORY" --base main --head "$branch" --state open --json number --jq '.[0].number // empty')
+owner=${GITHUB_REPOSITORY%%/*}
+pr=$(gh api --method GET "repos/$GITHUB_REPOSITORY/pulls" \
+  -f state=open -f base=main -f "head=$owner:$branch" \
+  --jq 'if length > 1 then error("Multiple canonical update PRs") else .[0].number // empty end')
 # A no-op with no pending PR has nothing to validate.
 [[ -n $pr ]] || exit 0
 [[ $pr =~ ^[0-9]+$ ]]
