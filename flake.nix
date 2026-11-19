@@ -2,7 +2,8 @@
   description = "Paul's Dell XPS 15 NixOS configuration";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/f1e5c356f35d07e7b71a6b5e6c9338e0b029e0c0";
+    # Release policy lives here; exact revisions remain pinned in flake.lock.
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
 
     # Keep Codex current without updating the workstation's package set.
     codex-nixpkgs.url = "github:NixOS/nixpkgs/3730a4017d0f44c3a09faa593269bcbddae1fa18";

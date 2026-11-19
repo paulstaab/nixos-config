@@ -52,7 +52,7 @@ git diff --name-status "$base" > "$report/changed-files.txt"
 printf 'Manual review required; auto-merge is disabled.\n' > "$report/update-policy.txt"
 if [[ $(git diff --name-only "$base") == flake.lock ]]; then
   scripts/gitops-lock-policy "$report/base/flake.lock" flake.lock
-  printf 'Lock-only Home Manager update passes structural policy. Auto-merge remains disabled.\n' > "$report/update-policy.txt"
+  printf 'Lock-only NixOS 26.05/Home Manager update passes structural policy. Auto-merge remains disabled.\n' > "$report/update-policy.txt"
 fi
 scripts/gitops-downgrades "$report/old-closure.json" "$report/new-closure.json" > "$report/downgrades.txt"
 git diff --exit-code -- flake.lock

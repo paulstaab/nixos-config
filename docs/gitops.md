@@ -1,6 +1,6 @@
 # GitOps preparation (2026-11-19)
 
-Status: local preparation only. No inputs, installed packages, system services,
+Status: local preparation only. No resolved input revisions, installed packages, system services,
 credentials or GitHub settings changed. No deployment or merge automation exists.
 Daily PR creation is implemented but gated by ENABLE_UPDATE_PRS == true; leave
 that variable unset until the owner approves enabling remote maintenance.
@@ -78,10 +78,10 @@ A successful build establishes neither hardware compatibility nor benign code.
 
 The 05:23 UTC schedule is best effort and may be delayed by GitHub. It is gated
 off by default. When explicitly enabled it runs only trusted main, serializes
-all invocations, updates only the existing home-manager input on release-26.05,
+all invocations, updates only nixpkgs on nixos-26.05 and home-manager on release-26.05,
 and requires flake.lock to be the sole changed file. Its Python guard preserves
 the entire graph, originals, follows edges, release branch and other pins; only
-Home Manager locked revision/hash/timestamp can advance. No-op updates exit
+nixpkgs and Home Manager locked revisions/hashes/timestamps can advance. No-op updates exit
 without a commit or PR. A decreasing upstream timestamp fails closed.
 
 The dedicated automation/dependency-updates branch and one open PR are reused.
@@ -95,14 +95,16 @@ through the ephemeral GITHUB_TOKEN, without a PAT or stored credentials. It neve
 checks out or executes PR branch code and never builds updated dependencies.
 No token is passed as a Nix input or committed. Do not add secrets to this job.
 
-Important limitation: nixpkgs and codex-nixpkgs have explicit revision URLs in
-flake.nix. A safe, consistent advance needs a flake.nix edit; lock-only automation
-cannot advance these pins. They remain manual updates under docs/updates.md.
-Do not override pinned originals just to manufacture a lock-only PR. Expanding
-automation requires a separately reviewed policy change (e.g. release branch URL
-for main nixpkgs, stable release provenance selection for Codex). No such change
-is included. Home Manager automation does not verify ancestry beyond the fixed
-upstream release ref; future auto-merge requires independent provenance checks.
+Nixpkgs now uses the fixed nixos-26.05 source ref, with its exact revision in
+flake.lock; Home Manager retains release-26.05 and follows that nixpkgs. The
+one-time migration changes only nixpkgs original metadata in flake.lock, preserving
+all locked revisions, hashes and timestamps. Future daily system PRs change only
+flake.lock. Codex keeps its explicit revision URL and remains a manual stable
+release update under docs/updates.md. The structural policy does not independently
+verify ancestry beyond the fixed upstream release refs; future auto-merge still
+requires independent provenance checks. Daily PRs can contain security fixes,
+ordinary bug fixes and other changes shipped on the release branch; they are not
+restricted to security-only updates.
 
 GITHUB_TOKEN-created PRs can require human approval before their CI runs; behavior
 must be verified in this private repository. Never treat absent checks as success.
@@ -254,7 +256,7 @@ References checked during preparation:
 
 Rollout order: review this local commit; approve publication separately; configure
 and verify protection/permissions/budget; trial successful and deliberately failing
-PRs; approve daily PR activation; resolve pin policy and trusted eligibility/review
+PRs; approve daily PR activation; resolve trusted eligibility/review
 enforcement; trial auto-merge before separately approving it; implement and audit
 host agent with rollback drills; separately approve temporary activation and runtime
 tests before any persistent deployment/timer enablement. No step is implied by the
@@ -277,3 +279,24 @@ No lock refresh, remote job, PR publication, merge, activation, timer enablement
 credential provisioning, reboot, GC, generation deletion or push was performed.
 Workflow execution on GitHub, private-repository token behavior, runner capacity,
 and actual upstream PR publication remain untested until approved publication.
+
+### Release-ref follow-up validation
+
+The minimal system-update policy change replaces nixpkgs' explicit source revision
+with nixos-26.05 in flake.nix and matching original metadata in flake.lock. Every
+locked revision/hash/timestamp and the complete Codex node are unchanged from
+a90ef84. No lock update command was run during this migration. Daily PR preparation
+now calls `nix flake update nixpkgs home-manager`; it still permits only flake.lock
+changes and rejects any other lock-graph or release-ref change. The release guard
+in the manual helper and administration instructions now match this policy.
+
+Full local scripts/gitops-ci against a90ef84 passed: actionlint, ShellCheck, Bash
+syntax, Nix parsing/formatting, Python policy fixtures, base/candidate flake checks
+and complete system builds. The security fixtures cover either release input
+advancing alone or together, forbidden release changes, Codex changes, malformed
+metadata, decreasing timestamps and version downgrades. Both systems resolve to
+the existing generation-8 closure; service, sensitive configuration and closure
+diffs are empty. Reports: /tmp/xenon-gitops-release-ref-validation. Generation 7
+remains available. No activation or runtime behavior changed; earlier runtime
+checks remain pending. Remote workflows and settings remain untested/unchanged,
+and daily PR creation remains gated off.

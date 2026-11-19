@@ -3,6 +3,7 @@
 Run from `~/nixos-config`. Maintenance requests authorize preparation, validation,
 and a local commit, but never activation, reboot, firmware updates, deletion of
 generations, or pushing. Do one mode per commit. Never run a blanket flake update.
+The prepared daily system PR workflow remains gated off; see gitops.md.
 The helper uses existing Bash, Git, jq, Nix, nixfmt, and diff; it installs nothing.
 
 ## 1. Capture the baseline
@@ -32,10 +33,10 @@ The release policy is **NixOS 26.05**, with Home Manager **release-26.05**.
 Obtain the current `nixos-26.05` branch head from the official NixOS/nixpkgs
 repository, for example with `git ls-remote https://github.com/NixOS/nixpkgs.git
 refs/heads/nixos-26.05`. Record that command's output and date in the report.
-Verify the selected commit belongs to that release branch. Replace only the
-40-character revision in `inputs.nixpkgs.url` in flake.nix with that commit.
-Keep the explicit revision pin. Leave codex-nixpkgs unchanged, keep Home Manager's
-URL at release-26.05, and preserve its nixpkgs follows relationship. Then run:
+Verify the selected commit belongs to that release branch. Keep the nixpkgs URL
+at `github:NixOS/nixpkgs/nixos-26.05`; exact revisions are pinned in flake.lock.
+Leave codex-nixpkgs unchanged, keep Home Manager's URL at release-26.05, and
+preserve its nixpkgs follows relationship. Update only these two release inputs:
 
 ```console
 nix flake update nixpkgs home-manager
@@ -89,8 +90,9 @@ validated result; fix the cause and rerun validation. Never bypass a failed chec
 
 Agent review is mandatory before committing:
 
-- Read input.diff and old-lock.json/new-lock.json. Ensure flake.nix changed only
-  the intended revision and lock originals match it. The helper's allowlist does
+- Read input.diff and old-lock.json/new-lock.json. For system updates, ensure only
+  flake.lock changed and both original release refs remain fixed. For Codex, ensure
+  flake.nix changed only its intended revision and the lock original matches it. The helper's allowlist does
   not validate arbitrary edits within flake.nix or prove upstream provenance.
 - Read config.diff, services.diff, and closure.diff. Explain kernel and initrd
   changes, bootloader packages, cryptsetup, systemd, networking, graphics, GNOME,
