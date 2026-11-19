@@ -229,12 +229,24 @@ an explicit replacement of the current per-activation owner approval policy.
 
 Use GitHub-hosted ubuntu-24.04, not a self-hosted xenon runner. Standard private
 Linux runners currently offer 2 CPU, 8 GB RAM and 14 GB SSD; a full GNOME closure
-and two generations can exceed disk/time limits. This has not been measured
-remotely. The workflow has a 120-minute cap; failures must remain blocking.
+and two generations can exceed disk/time limits. The owner-supplied CI log
+now confirms disk exhaustion while materializing the candidate closure. The
+subsequent Codex substitution and system-path dependency errors do not establish
+a Codex packaging failure; resolve capacity first. Initial and final filesystem
+space/inode diagnostics are now recorded by CI, including after failed builds.
+The workflow has a 120-minute cap; failures must remain blocking.
 Use cache.nixos.org signed substitutes by default, no external cache account is
 required. Explicit old pins/cache misses and unfree VS Code may require downloads
 or local compilation. If capacity fails, use a larger ephemeral hosted Linux
 runner with budget approval; do not silently omit the complete system build.
+GitHub currently restricts larger Linux runners to organizations on Team or
+Enterprise Cloud; this personal repository cannot assume access merely by
+changing runs-on. An organization/billing arrangement would need separate owner
+approval. See [larger runner availability](https://docs.github.com/en/actions/concepts/runners/larger-runners).
+No runner label, account arrangement, billing or repository setting is changed
+here. The standard-runner capacity blocker remains unresolved until adequate
+isolated capacity is approved and a full remote build passes. Do not work around
+it by removing Codex, weakening checks, running CI on xenon, or deleting generations.
 A later trusted cache can improve speed, with writes restricted to trusted main
 and no signing secret in PR builds.
 
@@ -300,3 +312,26 @@ diffs are empty. Reports: /tmp/xenon-gitops-release-ref-validation. Generation 7
 remains available. No activation or runtime behavior changed; earlier runtime
 checks remain pending. Remote workflows and settings remain untested/unchanged,
 and daily PR creation remains gated off.
+
+
+### Security-update review and observed CI failure
+
+Review began with a clean branch already at ac459db (after a90ef84). That existing
+commit implements the requested minimal release-ref migration and daily two-input
+update. Rechecked that every locked revision/hash/timestamp and the Codex node
+are unchanged from a90ef84, and hosts/ and home/ have no edits. No update command
+was run. The workflow keeps full builds, downgrade failures and sensitive-config
+review diagnostics; no failure is suppressed. Daily automation remains gated off.
+
+The supplied remote log reports "No space left on device" before the Codex and
+system-path failures. This is a runner capacity failure; local build success does
+not resolve it. Added only nonprivileged disk/inode diagnostics before Nix install
+and after validation (including failure), and documented the hosted-runner account
+constraint. No cleanup/GC, new runner service or paid resource was provisioned.
+
+Fresh local validation against a90ef84 passed: actionlint, ShellCheck, policy
+fixtures, both flake checks and complete system builds. Both resolve to generation
+8; configuration, service and closure diffs are empty, and generation 7 remains
+available. Diagnostics: /tmp/xenon-gitops-security-review. The added workflow disk
+reporting steps also pass actionlint. No activation, lock refresh, push or GitHub
+settings change was performed. Local success is not a successful remote CI run.

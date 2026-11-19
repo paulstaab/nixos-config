@@ -20,6 +20,11 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Record initial disk capacity
+        shell: bash
+        run: |
+          df -h / "$RUNNER_TEMP"
+          df -i / "$RUNNER_TEMP"
       - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
       - name: Validate and compare complete systems
         env:
@@ -36,6 +41,18 @@ jobs:
           nix shell "github:NixOS/nixpkgs/$pin#nixfmt" "github:NixOS/nixpkgs/$pin#actionlint" \
             "github:NixOS/nixpkgs/$pin#shellcheck" "github:NixOS/nixpkgs/$pin#python3" \
             -c scripts/gitops-ci "$base" "$RUNNER_TEMP/xenon-report"
+      - name: Record final disk capacity
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Runner disk capacity after validation'
+            echo '```text'
+            df -h / /nix/store "$RUNNER_TEMP"
+            df -i / /nix/store "$RUNNER_TEMP"
+            echo '```'
+            echo 'Disk exhaustion blocks validation. Use adequate isolated runner capacity; do not skip system builds.'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Publish summary
         if: always()
         shell: bash
