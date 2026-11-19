@@ -13,3 +13,7 @@ instructions.
 
 See [docs/updates.md](docs/updates.md) for separate system and Codex updates,
 validation reports, approval boundaries, runtime tests, and rollback.
+
+See [docs/gitops.md](docs/gitops.md) for the prepared GitHub CI/update-PR workflows,
+trust boundaries, pending GitHub settings and future pull deployment design.
+Automatic updates are gated off; merging and deployment remain manual.

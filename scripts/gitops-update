@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Runs only from reviewed main, never from a PR. No merge or deployment operation.
+set -euo pipefail
+[[ ${GITHUB_REPOSITORY:-} == paulstaab/nixos-config && ${GITHUB_REF:-} == refs/heads/main ]]
+[[ -z $(git status --porcelain) ]]
+base=$(git rev-parse HEAD)
+old=$(mktemp)
+trap 'rm -f "$old"' EXIT
+cp flake.lock "$old"
+# Advance only the approved release inputs; keep the separate Codex pin.
+nix flake update nixpkgs home-manager
+if git diff --quiet; then exit 0; fi
+[[ $(git diff --name-only) == flake.lock ]]
+scripts/gitops-lock-policy "$old" flake.lock
+git diff --check
+# Token is supplied only in this publishing step by the workflow. Never build
+# dependency code in this job; PR CI has read-only permissions and no secrets.
+git config user.name 'github-actions[bot]'
+git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+git add flake.lock
+git commit -m 'Update NixOS 26.05 and Home Manager locks'
+# Only replace our dedicated branch, with an exact lease; never overwrite main.
+branch=automation/dependency-updates
+header=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+remote_git() { git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $header" "$@"; }
+remote=$(remote_git ls-remote origin "refs/heads/$branch" | cut -f1)
+# A branch edited by a human is not safe to overwrite. Compare its complete tree
+# against this main before replacing it, accepting only policy-valid lock edits.
+if [[ -n $remote ]]; then
+  remote_git fetch origin "$remote"
+  [[ $(git diff --name-only "$base" "$remote") == flake.lock ]]
+  prior=$(mktemp)
+  git show "$remote:flake.lock" > "$prior"
+  scripts/gitops-lock-policy "$old" "$prior"
+  rm -f "$prior"
+fi
+remote_git \
+  push --force-with-lease="refs/heads/$branch:$remote" origin "HEAD:refs/heads/$branch"
+unset header
+pr=$(gh pr list --repo "$GITHUB_REPOSITORY" --base main --head "$branch" --state open --json number --jq '.[0].number // empty')
+if [[ -z $pr ]]; then
+  gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
+    --title 'Daily NixOS 26.05 and Home Manager update' \
+    --body 'Only nixpkgs on nixos-26.05 and Home Manager on release-26.05 may advance. Codex remains unchanged. Review CI diagnostics and approve CI execution if GitHub requests it. Automatic merging and deployment are disabled.'
+fi

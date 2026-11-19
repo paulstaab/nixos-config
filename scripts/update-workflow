@@ -61,6 +61,7 @@ jq -e --argjson allowed "$allowed" --slurpfile old "$report/old-lock.json" '
   (($new.nodes | keys) == ($old.nodes | keys)) and
   ([($new.nodes | keys[]) as $k | select(($allowed | index($k)) == null) |
       $new.nodes[$k] == $old.nodes[$k]] | all) and
+  .nodes["nixpkgs"].original.ref == "nixos-26.05" and
   .nodes["home-manager"].original.ref == "release-26.05" and
   .nodes["home-manager"].inputs.nixpkgs == ["nixpkgs"]
 ' flake.lock >/dev/null

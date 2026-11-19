@@ -1,0 +1,37 @@
+#!/usr/bin/env python3
+"""Fail closed: only nixpkgs/Home Manager locked release revisions may advance."""
+import copy
+import json
+import re
+import sys
+
+old, new = (json.load(open(p)) for p in sys.argv[1:])
+assert old != new, "No dependency update"
+normalized = copy.deepcopy(new)
+for node, owner, repo, ref in (
+    ("nixpkgs", "NixOS", "nixpkgs", "nixos-26.05"),
+    ("home-manager", "nix-community", "home-manager", "release-26.05"),
+):
+    a, b = old["nodes"][node], new["nodes"][node]
+    assert a["original"] == b["original"] == {
+        "owner": owner, "repo": repo, "ref": ref, "type": "github",
+    }
+    assert set(a) == set(b)
+    assert set(a["locked"]) == set(b["locked"]) == {
+        "owner", "repo", "rev", "narHash", "lastModified", "type",
+    }
+    for locked in (a["locked"], b["locked"]):
+        for key in ("owner", "repo", "type"):
+            assert locked[key] == b["original"][key]
+        assert re.fullmatch(r"[0-9a-f]{40}", locked["rev"])
+        assert re.fullmatch(r"sha256-[A-Za-z0-9+/]{43}=", locked["narHash"])
+        assert type(locked["lastModified"]) is int
+    assert b["locked"]["lastModified"] >= a["locked"]["lastModified"]
+    if a["locked"] != b["locked"]:
+        assert b["locked"]["rev"] != a["locked"]["rev"], "Same revision metadata changed"
+    normalized["nodes"][node]["locked"] = a["locked"]
+assert old["nodes"]["home-manager"]["inputs"] == new["nodes"]["home-manager"]["inputs"] == {
+    "nixpkgs": ["nixpkgs"],
+}
+# Includes root mappings, Codex, original metadata and every follows edge.
+assert old == normalized, "Unexpected lock graph change"

@@ -73,7 +73,8 @@ Follow [docs/updates.md](docs/updates.md) for every maintenance update. Use
 Start clean; capture a baseline before editing inputs. `system` updates only
 nixpkgs on nixos-26.05 plus Home Manager release-26.05. `codex` updates only the
 separately pinned codex-nixpkgs to a verified stable upstream Codex release.
-Preserve explicit revision pins, unrelated lock nodes, state versions, and all
+Preserve release refs, the explicit Codex revision pin, unrelated lock nodes,
+state versions, and all
 system generations. Never silently move release branches.
 
 Review input/version, closure, kernel/initrd, boot/encryption, and service diffs;
