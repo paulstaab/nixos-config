@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Non-privileged CI; arguments are immutable base commit and external report path.
+set -euo pipefail
+base=${1:?base commit required}
+report=${2:?report path required}
+[[ $base =~ ^[0-9a-f]{40}$ && $report == /* ]]
+mkdir -p "$report"
+report=$(realpath "$report")
+[[ $report != "$PWD" && $report != "$PWD/"* ]]
+git cat-file -e "$base^{commit}"
+git diff --check "$base"
+# Reject submodules and tracked symlinks: no hidden sources outside the repository.
+if git ls-files --stage | awk '$1 == "120000" || $1 == "160000" {bad=1} END {exit !bad}'; then
+  echo 'Tracked symlinks/submodules require a separately reviewed policy.' >&2
+  exit 1
+fi
+while IFS= read -r -d '' file; do
+  case "$file" in
+    *.nix)
+      nix-instantiate --parse "$file" >/dev/null
+      # Preserve the installer's existing formatting unless that file changes.
+      if [[ $file != hosts/xenon/hardware-configuration.nix ]] || ! git diff --quiet "$base" -- "$file"; then
+        nixfmt --check "$file"
+      fi
+      ;;
+  esac
+done < <(git ls-files -z)
+bash -n scripts/update-workflow scripts/gitops-ci scripts/gitops-update
+shellcheck scripts/gitops-ci scripts/gitops-update
+actionlint
+python3 -m py_compile scripts/gitops-lock-policy scripts/gitops-downgrades
+python3 tests/gitops-policy.py
+# All evaluations and builds refuse lock mutation.
+nix flake check --no-update-lock-file
+nix build --no-update-lock-file --out-link "$report/new-system" .#nixosConfigurations.xenon.config.system.build.toplevel
+mkdir "$report/base"
+git archive "$base" | tar -x -C "$report/base"
+nix flake check --no-update-lock-file "path:$report/base"
+nix build --no-update-lock-file --out-link "$report/old-system" "path:$report/base#nixosConfigurations.xenon.config.system.build.toplevel"
+for side in old new; do
+  source_flake=.
+  [[ $side == new ]] || source_flake="path:$report/base"
+  nix eval --no-update-lock-file --json "$source_flake#nixosConfigurations.xenon.config" \
+    --apply "$(cat scripts/gitops-snapshot.nix)" | jq -S . > "$report/$side-config.json"
+  nix path-info --json --recursive "$report/$side-system" > "$report/$side-closure.json"
+done
+jq -e '.release == "26.05" and .stateVersion == "26.05" and .homeStateVersion == "26.05"' "$report/new-config.json" >/dev/null
+diff -u "$report/old-config.json" "$report/new-config.json" > "$report/sensitive-config.diff" || [[ $? == 1 ]]
+diff -ru --no-dereference "$report/old-system/etc/systemd/system" "$report/new-system/etc/systemd/system" > "$report/services.diff" || [[ $? == 1 ]]
+nix store diff-closures "$report/old-system" "$report/new-system" > "$report/closure.diff"
+git diff --name-status "$base" > "$report/changed-files.txt"
+printf 'Manual review required; auto-merge is disabled.\n' > "$report/update-policy.txt"
+if [[ $(git diff --name-only "$base") == flake.lock ]]; then
+  scripts/gitops-lock-policy "$report/base/flake.lock" flake.lock
+  printf 'Lock-only Home Manager update passes structural policy. Auto-merge remains disabled.\n' > "$report/update-policy.txt"
+fi
+scripts/gitops-downgrades "$report/old-closure.json" "$report/new-closure.json" > "$report/downgrades.txt"
+git diff --exit-code -- flake.lock
