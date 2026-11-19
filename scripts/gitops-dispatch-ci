@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Trusted-main publisher helper. Inspect PR data, never execute its code.
+set -euo pipefail
+base=${1:?base SHA required}
+[[ $base =~ ^[0-9a-f]{40}$ ]]
+[[ ${GITHUB_REPOSITORY:-} == paulstaab/nixos-config && ${GITHUB_REF:-} == refs/heads/main ]]
+branch=automation/dependency-updates
+pr=$(gh pr list --repo "$GITHUB_REPOSITORY" --base main --head "$branch" --state open --json number --jq '.[0].number // empty')
+# A no-op with no pending PR has nothing to validate.
+[[ -n $pr ]] || exit 0
+[[ $pr =~ ^[0-9]+$ ]]
+metadata=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pr")
+head=$(jq -er --arg base "$base" --arg branch "$branch" '
+  select(.state == "open" and .user.login == "github-actions[bot]" and
+    .base.repo.id == 1455774448 and .head.repo.id == 1455774448 and
+    .base.ref == "main" and .base.sha == $base and .head.ref == $branch) |
+  .head.sha | select(test("^[0-9a-f]{40}$"))' <<< "$metadata")
+# Public repository: do not persist a credential or fetch a PR checkout.
+git fetch --no-tags https://github.com/paulstaab/nixos-config.git "$head"
+git merge-base --is-ancestor "$base" "$head"
+[[ $(git diff --name-only "$base" "$head") == flake.lock ]]
+old=$(mktemp)
+new=$(mktemp)
+trap 'rm -f "$old" "$new"' EXIT
+git show "$base:flake.lock" > "$old"
+git show "$head:flake.lock" > "$new"
+scripts/gitops-lock-policy "$old" "$new"
+# Workflow/scripts on the dispatch branch must match trusted main exactly.
+# The receiver pins checkout to github.sha and rejects a changed dispatch head.
+gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$branch" \
+  -f "base_sha=$base" -f "expected_head=$head"
+echo "Requested read-only validate-xenon for PR #$pr at $head against $base."
