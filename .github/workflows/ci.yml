@@ -5,6 +5,15 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      base_sha:
+        description: 'Immutable main base for an automated lock-only update'
+        type: string
+        default: ''
+      expected_head:
+        description: 'Exact bot PR head; required together with base_sha'
+        type: string
+        default: ''
 permissions:
   contents: read
 concurrency:
@@ -18,8 +27,26 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Verify dispatched update identity
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          BASE_SHA: ${{ inputs.base_sha }}
+          EXPECTED_HEAD: ${{ inputs.expected_head }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Empty inputs preserve ordinary manual CI. Partial inputs fail closed.
+          if [[ -n $BASE_SHA || -n $EXPECTED_HEAD ]]; then
+            [[ $GITHUB_REPOSITORY == paulstaab/nixos-config ]]
+            [[ $GITHUB_REF == refs/heads/automation/dependency-updates ]]
+            [[ $BASE_SHA =~ ^[0-9a-f]{40}$ && $EXPECTED_HEAD =~ ^[0-9a-f]{40}$ ]]
+            [[ $GITHUB_SHA == "$EXPECTED_HEAD" && $(git rev-parse HEAD) == "$EXPECTED_HEAD" ]]
+            git merge-base --is-ancestor "$BASE_SHA" HEAD
+            [[ $(git diff --name-only "$BASE_SHA" HEAD) == flake.lock ]]
+          fi
       - name: Record initial disk capacity
         shell: bash
         run: |
@@ -28,7 +55,7 @@ jobs:
       - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
       - name: Validate and compare complete systems
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha || github.event.before }}
         shell: bash
         run: |
           set -euo pipefail

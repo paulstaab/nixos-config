@@ -3,19 +3,26 @@ on:
   schedule:
     - cron: '23 5 * * *'
   workflow_dispatch:
+    inputs:
+      trial:
+        description: 'One-shot update PR trial; does not enable the daily schedule'
+        type: boolean
+        default: false
 permissions: {}
 concurrency:
   group: xenon-dependency-update
   cancel-in-progress: false
 jobs:
   update:
-    # Disabled until the owner explicitly configures this repository variable.
-    if: github.repository == 'paulstaab/nixos-config' && github.ref == 'refs/heads/main' && vars.ENABLE_UPDATE_PRS == 'true'
+    # Schedule stays gated off; an explicit trial allows one approved manual run.
+    if: github.repository == 'paulstaab/nixos-config' && github.ref == 'refs/heads/main' && ((github.event_name == 'schedule' && vars.ENABLE_UPDATE_PRS == 'true') || (github.event_name == 'workflow_dispatch' && inputs.trial))
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: write
       pull-requests: write
+      # Only trusted main can request CI. CI itself has contents:read only.
+      actions: write
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:

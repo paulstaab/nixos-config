@@ -25,11 +25,12 @@ while IFS= read -r -d '' file; do
       ;;
   esac
 done < <(git ls-files -z)
-bash -n scripts/update-workflow scripts/gitops-ci scripts/gitops-update
-shellcheck scripts/gitops-ci scripts/gitops-update
+bash -n scripts/update-workflow scripts/gitops-ci scripts/gitops-update scripts/gitops-dispatch-ci
+shellcheck scripts/gitops-ci scripts/gitops-update scripts/gitops-dispatch-ci
 actionlint
 python3 -m py_compile scripts/gitops-lock-policy scripts/gitops-downgrades
 python3 tests/gitops-policy.py
+python3 tests/gitops-dispatch.py
 # All evaluations and builds refuse lock mutation.
 nix flake check --no-update-lock-file
 nix build --no-update-lock-file --out-link "$report/new-system" .#nixosConfigurations.xenon.config.system.build.toplevel

@@ -9,7 +9,11 @@ trap 'rm -f "$old"' EXIT
 cp flake.lock "$old"
 # Advance only the approved release inputs; keep the separate Codex pin.
 nix flake update nixpkgs home-manager
-if git diff --quiet; then exit 0; fi
+if git diff --quiet; then
+  # Recover a previous publish/dispatch failure even when upstream is unchanged.
+  scripts/gitops-dispatch-ci "$base"
+  exit 0
+fi
 [[ $(git diff --name-only) == flake.lock ]]
 scripts/gitops-lock-policy "$old" flake.lock
 git diff --check
@@ -37,9 +41,14 @@ fi
 remote_git \
   push --force-with-lease="refs/heads/$branch:$remote" origin "HEAD:refs/heads/$branch"
 unset header
-pr=$(gh pr list --repo "$GITHUB_REPOSITORY" --base main --head "$branch" --state open --json number --jq '.[0].number // empty')
+owner=${GITHUB_REPOSITORY%%/*}
+pr=$(gh api --method GET "repos/$GITHUB_REPOSITORY/pulls" \
+  -f state=open -f base=main -f "head=$owner:$branch" \
+  --jq 'if length > 1 then error("Multiple canonical update PRs") else .[0].number // empty end')
 if [[ -z $pr ]]; then
   gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
     --title 'Daily NixOS 26.05 and Home Manager update' \
     --body 'Only nixpkgs on nixos-26.05 and Home Manager on release-26.05 may advance. Codex remains unchanged. Review CI diagnostics and approve CI execution if GitHub requests it. Automatic merging and deployment are disabled.'
 fi
+
+scripts/gitops-dispatch-ci "$base"

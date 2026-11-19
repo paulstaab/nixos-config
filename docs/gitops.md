@@ -1,16 +1,20 @@
 # GitOps preparation (2026-11-19)
 
-Status: local preparation only. No resolved input revisions, installed packages, system services,
-credentials or GitHub settings changed. No deployment or merge automation exists.
-Daily PR creation is implemented but gated by ENABLE_UPDATE_PRS == true; leave
-that variable unset until the owner approves enabling remote maintenance.
-The current manual procedures and activation approval requirements remain in force.
+Status: public repository; PR #1 is merged into main at
+8f3dc4b3c3cdd3c4124fdac38aef4a0f0c0ff208. The first required PR CI trial and
+post-merge main CI passed. Branch metadata confirms main is protected; exact
+required contexts/review rules remain owner-confirmed, not independently audited.
+This follow-up is local preparation for explicitly dispatched automated-PR CI.
+No merging or deployment automation is enabled. Daily PR creation stays gated
+off unless the owner separately authorizes ENABLE_UPDATE_PRS. Manual trials
+require the explicit trial=true workflow input and separate execution approval.
+No resolved input revisions, installed packages or system services changed.
 
 ## Inspection and pending work
 
-Initial worktree was clean on main at 408e186, equal to the local origin/main
+Historical initial preparation: worktree was clean on main at 408e186, equal to the local origin/main
 tracking ref. No workflows existed in that tree; remote ci.yml returned 404.
-GitHub metadata confirms paulstaab/nixos-config is private, defaults to main,
+At initial preparation, GitHub metadata reported paulstaab/nixos-config as private, defaults to main,
 and allow_auto_merge is false. The connector reports repository admin permissions,
 but reading branch protection returned 403. Actions permissions/workflow listing
 endpoints are unsupported by the connector. Protection, rulesets, enabled runners,
@@ -106,12 +110,48 @@ requires independent provenance checks. Daily PRs can contain security fixes,
 ordinary bug fixes and other changes shipped on the release branch; they are not
 restricted to security-only updates.
 
-GITHUB_TOKEN-created PRs can require human approval before their CI runs; behavior
-must be verified in this private repository. Never treat absent checks as success.
-This preparation adds no PAT/App token to evade that boundary. If truly unattended
-CI triggering later needs an App, scope its installation to this repository and
-separate PR publication from read-only builds. See GitHub's current
+### Guaranteed trigger path, isolated validation
+
+GitHub's current documented behavior permits GITHUB_TOKEN-created opened,
+synchronize and reopened PR events to create approval-required runs; it does not
+provide unattended pull_request execution. Token-origin push events do not trigger
+push CI. The live history contains only human-origin PR/main CI runs, so this
+repository has no evidence yet of a bot PR completing pull_request CI unaided.
+Treat that approval/restriction as a rollout blocker rather than assuming a public
+repository fixes it. See the official
 [trigger rules](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow).
+
+The smallest no-new-secret solution explicitly dispatches existing ci.yml on
+refs/heads/automation/dependency-updates after publishing the PR. workflow_dispatch
+is a documented GITHUB_TOKEN trigger exception. Only the trusted-main publisher
+receives actions:write in addition to its existing publication permissions. Its
+helper verifies the canonical repository ID 1455774448, open github-actions[bot]
+PR, main base, dedicated same-repository head branch, exact SHA, ancestry,
+lock-only file diff and complete lock graph policy. It reads branch data but
+never checks out or executes its scripts. No App, PAT, added secret, privileged
+pull_request_target or workflow_run artifact execution is needed.
+
+Dispatch sends immutable base_sha and expected_head. Checkout uses github.sha;
+receiver requires the dedicated branch, exact expected head, base ancestry and
+lock-only diff before validation. The branch's workflow/scripts equal trusted
+main because only flake.lock may differ. All normal checks, downgrade rejection,
+base/candidate flake checks and complete xenon builds still run. The resulting
+validate-xenon check attaches to the dispatched PR head, not the publisher's main
+commit. Existing human PR CI continues to test GitHub's merge candidate. Strict
+current-base protection is needed when main advances; dispatch does not silently
+rebase or authorize a stale result. A head race fails the run instead of accepting
+a different revision. A writer who can rewrite the bot branch/workflows is within
+the GitHub write-access trust boundary; protect automation branches accordingly.
+
+The helper also retries dispatch for a pending PR when updating dependencies is a
+no-op. No pending PR means no dispatch. API/dispatch/policy errors fail publication;
+there is no fallback to a green status or suppressed failure. Successful publisher
+status means only that CI was requested, never that it passed. A temporary GitHub
+outage or canceled/failed dispatch requires rerunning the publisher or an approved
+manual exact-SHA dispatch. As with any hosted CI, the trigger is deterministic
+when GitHub accepts it, not a guarantee of service availability/build success.
+A duplicate approval-held pull_request run may coexist; do not cancel safeguards
+or assume the dispatch check satisfies protection until the first trial proves it.
 
 ## Manual GitHub configuration and future auto-merge
 
@@ -227,37 +267,26 @@ an explicit replacement of the current per-activation owner approval policy.
 
 ## Capacity, costs and rollout
 
-Use GitHub-hosted ubuntu-24.04, not a self-hosted xenon runner. Standard private
-Linux runners currently offer 2 CPU, 8 GB RAM and 14 GB SSD; a full GNOME closure
-and two generations can exceed disk/time limits. The owner-supplied CI log
-now confirms disk exhaustion while materializing the candidate closure. The
-subsequent Codex substitution and system-path dependency errors do not establish
-a Codex packaging failure; resolve capacity first. Initial and final filesystem
-space/inode diagnostics are now recorded by CI, including after failed builds.
-The workflow has a 120-minute cap; failures must remain blocking.
-Use cache.nixos.org signed substitutes by default, no external cache account is
-required. Explicit old pins/cache misses and unfree VS Code may require downloads
-or local compilation. If capacity fails, use a larger ephemeral hosted Linux
-runner with budget approval; do not silently omit the complete system build.
-GitHub currently restricts larger Linux runners to organizations on Team or
-Enterprise Cloud; this personal repository cannot assume access merely by
-changing runs-on. An organization/billing arrangement would need separate owner
-approval. See [larger runner availability](https://docs.github.com/en/actions/concepts/runners/larger-runners).
-No runner label, account arrangement, billing or repository setting is changed
-here. The standard-runner capacity blocker remains unresolved until adequate
-isolated capacity is approved and a full remote build passes. Do not work around
-it by removing Codex, weakening checks, running CI on xenon, or deleting generations.
-A later trusted cache can improve speed, with writes restricted to trusted main
-and no signing secret in PR builds.
+Use GitHub-hosted ubuntu-24.04, never a xenon/self-hosted runner. The earlier
+private-runner disk failure was followed by a successful run. Owner-supplied
+successful diagnostics show a 145 GB filesystem, 69 GB used and 76 GB available,
+with 8% of inodes used; remote CI history independently confirms success. That
+capacity observation is more useful than assuming all runs have a 14 GB disk.
+Keep initial/final disk diagnostics and the 120-minute limit: failures remain
+blocking, and future cache misses or two changed closures may need more capacity.
+Signed cache.nixos.org substitutes remain the default; no external cache account,
+cache signing secret, garbage collection or omitted builds are introduced.
 
-At 30–60 minutes per daily CI run, budget roughly 900–1800 Linux minutes/month
-plus interactive PRs, reruns, main builds, and small update jobs. No-op update days
-avoid CI. At the documented standard Linux rate of $0.006/minute, gross compute
-is about $5.40–$10.80 before included credit; larger runners/storage differ.
-This is a planning estimate, not observed runtime or a verified account quota.
-Check the account plan, spending limit and invoices. Private branch protection
-requires a qualifying paid plan (e.g. Pro for a personal repository). Copilot
-review availability and additional consumption depend on license and settings.
+The repository is now public. Standard GitHub-hosted runner compute is free for
+public repositories under GitHub's current policy; larger runners and other
+metered services can still cost money. Artifact retention stays seven days.
+Do not assume a larger Linux runner is available to a personal account; those
+require an eligible organization/enterprise plan. The prior private-runner
+900–1800 minutes/month estimate is historical, not a current bill forecast.
+Duplicate automatic and dispatched runs can consume additional capacity; both
+remain read-only. Review actual duration and storage after the first bot trial.
+See [billing](https://docs.github.com/en/actions/concepts/billing-and-usage) and
+[larger runner availability](https://docs.github.com/en/actions/concepts/runners/larger-runners).
 
 References checked during preparation:
 [runner specifications](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax),
@@ -274,7 +303,10 @@ host agent with rollback drills; separately approve temporary activation and run
 tests before any persistent deployment/timer enablement. No step is implied by the
 previous one.
 
-## Local validation record
+## Historical local validation records (before PR #1)
+
+These records describe preparation at the time. Current remote verification and
+the remaining automated-PR trial are documented below.
 
 Preparation passed actionlint, ShellCheck for both new Bash scripts, Bash syntax,
 Nix parse/format checks with the documented hardware-file exception, Python compile
@@ -335,3 +367,110 @@ fixtures, both flake checks and complete system builds. Both resolve to generati
 available. Diagnostics: /tmp/xenon-gitops-security-review. The added workflow disk
 reporting steps also pass actionlint. No activation, lock refresh, push or GitHub
 settings change was performed. Local success is not a successful remote CI run.
+
+
+## Public rollout verification and first bot PR trial
+
+Read-only verification for this follow-up:
+
+- Repository metadata: public, default main, allow_auto_merge=false.
+- PR #1 merged at 2026-11-19T20:48:11Z into 8f3dc4b.
+- [PR CI 44611674379](https://github.com/paulstaab/nixos-config/actions/runs/44611674379)
+  completed successfully for c662672.
+- [Main CI 44612365911](https://github.com/paulstaab/nixos-config/actions/runs/44612365911)
+  completed successfully for 8f3dc4b.
+- Both workflow files are active on GitHub and match fetched main. Main branch
+  metadata says protected=true. Unauthenticated protection detail returned 401;
+  initial connector access was also insufficient. Required validate-xenon context,
+  its source App, strict up-to-date setting, review rules and administrator bypass
+  must be confirmed by the owner. No settings were modified or secrets inspected.
+
+The following procedure is prepared, **not executed or authorized by this commit**:
+
+1. Review and separately approve publication of this feature branch/PR. Merge it
+   only through the normal human-review/required-CI process. Ensure these updated
+   workflow definitions are on main before attempting a bot trial.
+2. Verify ENABLE_UPDATE_PRS is absent/false, auto-merge remains off, no deployment
+   is installed/enabled, and validate-xenon with the intended GitHub Actions App is
+   required with current-base enforcement. Confirm the token is allowed to create
+   PRs; do not provision a PAT or bypass protection. Record main SHA and old lock.
+3. Obtain explicit owner approval for **one remote update PR trial**, then run:
+   `gh workflow run dependency-updates.yml --repo paulstaab/nixos-config --ref main -f trial=true`.
+   This allows one dispatch without setting ENABLE_UPDATE_PRS; scheduled events
+   remain disabled. Dispatch only reviewed main, never an arbitrary feature ref.
+4. Inspect the publisher run. If both upstream refs are unchanged and no pending
+   PR exists, no PR/CI is expected; record the no-op and wait for a real update.
+   Do not fabricate newer pins or weaken policy to force a test.
+5. For a created/updated PR, record number, base SHA and head SHA. Confirm bot
+   author, canonical head repository/branch, exactly flake.lock changed, only
+   approved locked records advanced, originals/follows unchanged, Codex untouched.
+   Confirm the publisher requested ci.yml with those exact SHAs.
+6. In Actions, verify an independent workflow_dispatch Xenon CI run started on
+   that exact PR head without a human PR-workflow approval. Inspect its contents:read
+   token permissions; the publisher alone has write permissions. Verify both full
+   system builds, downgrade checks and diagnostics. Check the PR's required
+   validate-xenon result is actually satisfied by this head run; a check on main
+   or the publisher's green job does not count. If GitHub instead requires a held
+   merge-ref run, record the trigger/check-association blocker and stop; do not
+   change settings or approve a bypass to claim unattended operation works.
+7. Review closure, protected config, unit diffs and package changes manually.
+   Sensitive changes still require owner decisions. Failed/missing/queued/canceled
+   or stale CI blocks progression. No merge, deployment or activation is implied.
+8. With separate approval, rerun the one-shot publisher to test existing-PR reuse
+   and dispatch recovery; it must not create a second open PR. If main/branch moved,
+   expect fail-closed behavior and reconcile through review. Offline adversarial
+   fixtures cover fork heads, wrong author/base/ref, extra files and dispatch errors;
+   do not push malicious test payloads to the privileged automation branch.
+9. Record run URLs, SHAs, outcomes and any approval prompts in this document.
+   Leave the schedule disabled. Ask separately before merging the dependency PR,
+   enabling daily updates, or preparing auto-merge/deployment.
+
+## Independent auto-merge gate proposal (not implemented/enabled)
+
+Keep the trusted eligibility decision outside the candidate workflow. Candidate
+validate-xenon can be edited by ordinary PRs and is not an independent policy gate.
+Use a small GitHub App or an organization-required workflow pinned to a reviewed
+policy revision, with access limited to this repository. A dedicated default-main
+workflow can also be considered, but its policy changes then need independent
+review and main protection; a privileged workflow_run must never execute PR code,
+unzip untrusted artifacts or feed untrusted strings to a shell.
+
+The gate independently queries the API for open PR, author/repository identity,
+current main/head SHAs, exact changed-file list, trusted lock parser validation,
+fixed release refs/follows/Codex pin, and upstream ancestry/provenance. It verifies
+successful required CI by workflow identity, source App, event and exact SHA, not
+merely a matching check name, label, comment or publisher success. Require the
+read-only build workflow's completed run against that current base/head. Any
+new head/base, missing evidence, ambiguity, downgrade, changed protected settings
+or unexpected privileged units denies automatic eligibility. Package version
+strings/hashes alone cannot prove update safety; dependency source trust remains.
+
+Run any independent base/candidate evaluation/build on a disposable read-only
+worker without App/write credentials. Pass only validated immutable identifiers
+and status to a separate minimal controller; it rechecks current SHAs and required
+checks immediately before a compare-and-swap/expected-head merge operation.
+Do not grant blanket branch-protection bypass. Enforce human approval for every
+noneligible PR and trusted-policy/workflow edit, while designing a narrowly scoped
+exception for proven lock-only PRs that does not bypass required CI. This review-rule
+interaction must be tested before enabling auto-merge; Copilot remains supplemental.
+No merge-capable controller, token, status writer, policy bypass or repository
+setting change is included in this follow-up.
+
+## Dispatch follow-up local validation
+
+On feature branch prepare/gitops-update-ci based on fetched main 8f3dc4b, complete
+scripts/gitops-ci passed against that main SHA: actionlint, ShellCheck, Bash/Nix
+syntax and formatting checks, lock/downgrade fixtures, mocked publisher/receiver
+security fixtures, both nix flake check invocations and complete xenon builds.
+Additional receiver fixtures exercise the actual inline workflow shell for stale
+head/ref races, malformed/partial inputs, wrong repository and invalid ancestry.
+Base and candidate both resolve to the existing generation-8 system; closure,
+service and sensitive configuration diffs are empty. Generation 7 remains present.
+Reports: /tmp/xenon-gitops-trigger-validation. Flake files, resolved revisions,
+Codex, host/home configuration and state versions are unchanged. Earlier desktop
+and new-kernel runtime checks remain pending; no new activation behavior exists.
+
+All GitHub writes in the fixtures were mocked. No real remote job, automated PR,
+push, merge, settings change, activation, timer, deployment or GC was performed.
+The exact-head required-check association and token permissions on GitHub are
+explicit acceptance criteria for the separately approved first bot PR trial.
