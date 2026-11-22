@@ -47,8 +47,8 @@ mechanism.
 1. Read this file, `README.md`, and the relevant files under `docs/`.
 2. Inspect the worktree and preserve unrelated user changes.
 3. Make the smallest declarative change that fulfills the request.
-4. For configuration changes, run parse/evaluation checks, `nix flake check`,
-   and build `.#nixosConfigurations.xenon.config.system.build.toplevel`.
+4. For configuration changes, run parse/evaluation checks, `nix flake check path:$PWD`,
+   and build `path:$PWD#nixosConfigurations.xenon.config.system.build.toplevel`.
 5. Review the activation diff and state what still requires runtime testing.
 6. Confirm that a known-good system generation remains available.
 7. Stop before activation unless the owner explicitly approved activation.
@@ -68,18 +68,16 @@ and authorized. Prefer an explicit migration or backup plan over forced writes.
 
 ## Routine updates
 
-Follow [docs/updates.md](docs/updates.md) for every maintenance update. Use
-`scripts/update-workflow prepare|validate system|codex /absolute/report-directory`.
-Start clean; capture a baseline before editing inputs. `system` updates only
-nixpkgs on nixos-26.05 plus Home Manager release-26.05. `codex` updates only the
-separately pinned codex-nixpkgs to a verified stable upstream Codex release.
-Preserve release refs, the explicit Codex revision pin, unrelated lock nodes,
-state versions, and all
-system generations. Never silently move release branches.
+Follow [docs/updates.md](docs/updates.md). The owner-authorized standing policy
+is daily local input updates and `nixos-rebuild boot`, no automatic reboot,
+weekly native GC with a 30-day threshold, and 20 systemd-boot entries. This is an
+explicit exception to per-run boot activation and generation deletion approval
+for these configured services only. Initial activation still requires approval.
+Do not run the services or GC during implementation/validation.
 
-Review input/version, closure, kernel/initrd, boot/encryption, and service diffs;
-record provenance, validation, risks, and pending runtime tests in a focused
-local commit. The helper does not replace agent review or upstream verification.
-Stop after committing and report the result. Temporary activation, permanent
-activation, reboot, firmware updates, and remote pushes each require explicit
-owner approval. No scheduled updates or unattended activation are authorized.
+flake.lock is local and ignored. Always use an explicit absolute `path:` flake
+for checks/builds/rebuilds so the ignored lock is included. Preserve nixos-26.05,
+release-26.05, the separate Codex revision pin, and state versions. Daily updates
+do not commit or push. Keep the permanent checkout at /home/paul/nixos-config;
+do not point the service at a transient worktree. Review source changes before
+placing them there: the updater trusts the checkout as root code.

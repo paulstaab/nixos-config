@@ -25,21 +25,21 @@ while IFS= read -r -d '' file; do
       ;;
   esac
 done < <(git ls-files -z)
-bash -n scripts/update-workflow scripts/gitops-ci scripts/gitops-update scripts/gitops-dispatch-ci
-shellcheck scripts/gitops-ci scripts/gitops-update scripts/gitops-dispatch-ci
+bash -n scripts/gitops-ci
+shellcheck scripts/gitops-ci
 actionlint
 python3 -m py_compile scripts/gitops-lock-policy scripts/gitops-downgrades
 python3 tests/gitops-policy.py
-python3 tests/gitops-dispatch.py
 # All evaluations and builds refuse lock mutation.
-nix flake check --no-update-lock-file
-nix build --no-update-lock-file --out-link "$report/new-system" .#nixosConfigurations.xenon.config.system.build.toplevel
+nix flake check --no-update-lock-file "path:$PWD"
+nix build --no-update-lock-file --out-link "$report/new-system" "path:$PWD#nixosConfigurations.xenon.config.system.build.toplevel"
 mkdir "$report/base"
 git archive "$base" | tar -x -C "$report/base"
+nix flake lock "path:$report/base"
 nix flake check --no-update-lock-file "path:$report/base"
 nix build --no-update-lock-file --out-link "$report/old-system" "path:$report/base#nixosConfigurations.xenon.config.system.build.toplevel"
 for side in old new; do
-  source_flake=.
+  source_flake="path:$PWD"
   [[ $side == new ]] || source_flake="path:$report/base"
   nix eval --no-update-lock-file --json "$source_flake#nixosConfigurations.xenon.config" \
     --apply "$(cat scripts/gitops-snapshot.nix)" | jq -S . > "$report/$side-config.json"
@@ -47,13 +47,8 @@ for side in old new; do
 done
 jq -e '.release == "26.05" and .stateVersion == "26.05" and .homeStateVersion == "26.05"' "$report/new-config.json" >/dev/null
 diff -u "$report/old-config.json" "$report/new-config.json" > "$report/sensitive-config.diff" || [[ $? == 1 ]]
-diff -ru --no-dereference "$report/old-system/etc/systemd/system" "$report/new-system/etc/systemd/system" > "$report/services.diff" || [[ $? == 1 ]]
+diff -ru "$report/old-system/etc/systemd/system/" "$report/new-system/etc/systemd/system/" > "$report/services.diff" || [[ $? == 1 ]]
 nix store diff-closures "$report/old-system" "$report/new-system" > "$report/closure.diff"
 git diff --name-status "$base" > "$report/changed-files.txt"
 printf 'Manual review required; auto-merge is disabled.\n' > "$report/update-policy.txt"
-if [[ $(git diff --name-only "$base") == flake.lock ]]; then
-  scripts/gitops-lock-policy "$report/base/flake.lock" flake.lock
-  printf 'Lock-only NixOS 26.05/Home Manager update passes structural policy. Auto-merge remains disabled.\n' > "$report/update-policy.txt"
-fi
 scripts/gitops-downgrades "$report/old-closure.json" "$report/new-closure.json" > "$report/downgrades.txt"
-git diff --exit-code -- flake.lock

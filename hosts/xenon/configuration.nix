@@ -7,6 +7,7 @@
 {
   imports = [
     ./hardware-configuration.nix
+    ./updates.nix
   ];
 
   # Preserve the installer-generated boot configuration during migration.
