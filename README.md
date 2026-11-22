@@ -11,9 +11,6 @@ and [docs/recovery.md](docs/recovery.md) before activating a change.
 See [docs/desktop-applications.md](docs/desktop-applications.md) for first-run
 instructions.
 
-See [docs/updates.md](docs/updates.md) for separate system and Codex updates,
-validation reports, approval boundaries, runtime tests, and rollback.
-
-See [docs/gitops.md](docs/gitops.md) for the prepared GitHub CI/update-PR workflows,
-trust boundaries, pending GitHub settings and future pull deployment design.
-Automatic updates are gated off; merging and deployment remain manual.
+See [docs/updates.md](docs/updates.md) for local daily updates prepared for the
+next manual reboot, local lock-file handling, monitoring, retention and rollback.
+See [docs/gitops.md](docs/gitops.md) for read-only GitHub PR verification.

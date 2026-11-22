@@ -32,9 +32,9 @@ firmware update without explicit approval.
 ## Validate
 
 ```console
-nix flake check
-nix build .#nixosConfigurations.xenon.config.system.build.toplevel
-sudo nixos-rebuild dry-activate --flake .#xenon
+nix flake check "path:$PWD"
+nix build "path:$PWD#nixosConfigurations.xenon.config.system.build.toplevel"
+sudo nixos-rebuild dry-activate --flake "path:$PWD#xenon"
 ```
 
 The build command creates a local `result` symlink, which is ignored by Git. A
@@ -47,10 +47,10 @@ requesting activation approval.
 After approval, first re-run validation and then temporarily activate:
 
 ```console
-nix flake check
-nix build .#nixosConfigurations.xenon.config.system.build.toplevel
-sudo nixos-rebuild dry-activate --flake .#xenon
-sudo nixos-rebuild test --flake .#xenon
+nix flake check "path:$PWD"
+nix build "path:$PWD#nixosConfigurations.xenon.config.system.build.toplevel"
+sudo nixos-rebuild dry-activate --flake "path:$PWD#xenon"
+sudo nixos-rebuild test --flake "path:$PWD#xenon"
 ```
 
 Test login, GNOME, Wi-Fi, audio, graphics, external displays, suspend, and any
@@ -58,7 +58,7 @@ Home Manager-managed files. Do not test hibernation as part of this migration.
 If the temporary activation works, request approval before making it persistent:
 
 ```console
-sudo nixos-rebuild switch --flake .#xenon
+sudo nixos-rebuild switch --flake "path:$PWD#xenon"
 ```
 
 Reboot testing is a separate step. A successful build does not prove runtime
@@ -66,10 +66,10 @@ functionality.
 
 ## Updating inputs
 
-Follow [updates.md](updates.md) and `scripts/update-workflow` for separate
-`system` and `codex` maintenance. Capture a clean baseline, select explicit
-revisions, validate the complete closure, review the report, and commit locally
-before requesting activation. Never use a blanket input update.
+Follow [updates.md](updates.md) for the local daily boot-only updater. Always
+use explicit path flakes to include the ignored local lock. Initial activation
+and manual privileged operations require approval. Automatic updates neither
+commit nor push and never reboot.
 
 ## Current sandbox limitations
 

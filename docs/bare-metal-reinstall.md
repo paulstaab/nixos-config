@@ -155,8 +155,9 @@ export NIX_CONFIG='experimental-features = nix-command flakes'
 git diff --check
 git diff
 rg 'c1ee8d4a-8b0e-4706-8f2d-bcc9add662e0|313af177-0457-49cd-a58e-9bf51024b8b3|D0C9-CBBD' hosts/xenon
-nix flake check
-nix build .#nixosConfigurations.xenon.config.system.build.toplevel
+nix flake lock "path:$PWD"
+nix flake check "path:$PWD"
+nix build "path:$PWD#nixosConfigurations.xenon.config.system.build.toplevel"
 ```
 
 The `rg` check must find no old identifiers (exit status 1 means no matches).
@@ -169,7 +170,7 @@ the lock file to work around a failure without reviewing the cause.
 After reviewing the diff and obtaining installation/bootloader-write approval:
 
 ```sh
-sudo nixos-install --root /mnt --flake /mnt/home/paul/nixos-config#xenon
+sudo nixos-install --root /mnt --flake path:/mnt/home/paul/nixos-config#xenon
 sudo nixos-enter --root /mnt -c 'passwd paul'
 sudo nixos-enter --root /mnt -c 'chown -R paul:users /home/paul/nixos-config'
 sudo nixos-enter --root /mnt -c 'chown paul:users /home/paul'
