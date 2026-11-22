@@ -88,16 +88,6 @@ Implementation details and procedures belong in the linked runbooks.
 - Treat a fresh reinstall as fresh user state: full recovery of local settings,
   sessions, and keys is outside the current scope.
 
-## Deferred scope and acceptance
-
-- Hibernation repair, system snapshots, and full user-state backups are deferred.
-- Server availability and server-side backups for Nextcloud and paperless-ngx
-  are outside this laptop configuration's scope.
-- A successful build alone does not establish runtime reliability. Desktop,
-  networking, hardware, application integration, and reboot behavior require
-  acceptance testing; the blank-SSD reinstall procedure also remains unproven
-  end to end.
-
 See [desktop-applications.md](desktop-applications.md),
 [administration.md](administration.md), [updates.md](updates.md),
 [recovery.md](recovery.md), and
