@@ -78,3 +78,25 @@ runtime state, privileged Btrfs subvolume enumeration, systemd-boot files on the
 ESP, or EFI boot entries. Those denials were assessment sandbox restrictions,
 not diagnosed workstation failures. Privileged read-only checks should be run on
 the host before the first activation where they are relevant.
+
+## Codex update (2026-11-22)
+
+Updated the separate Codex Nixpkgs pin from
+`3730a4017d0f44c3a09faa593269bcbddae1fa18` to
+`93a9ed0a866099a230ed5146a5bb7d16fd5c9b14`, selecting stable Codex
+0.171.0 instead of 0.167.1. Only this input changed in the ignored local lock;
+main Nixpkgs, Home Manager and state versions are unchanged.
+
+Nix parsing, formatting, flake check and the complete xenon build passed with
+`path:/home/paul/nixos-config`. The built binary reports `codex-cli 0.171.0`.
+Closure comparison against running generation 10 shows only the Codex update.
+Kernel, initrd and kernel parameters are identical. Generated service differences
+are system-path references and derived D-Bus/polkit restart triggers; temporary
+activation may restart those desktop services. Generation 10 still resolves to
+an existing store path and remains available for recovery.
+
+The validated build is rooted at `/tmp/xenon-codex-system`. Activation has not
+been performed. After owner-approved temporary activation, start a fresh Codex
+session and verify normal interactive use, plus desktop/D-Bus behavior if
+services restart. Existing private Codex state is not managed by this change.
+Use the previous generation for rollback if needed, following recovery.md.
