@@ -11,7 +11,7 @@ the system profile and are available after a fresh boot without `nix-shell`.
 Start Codex from a terminal in the repository:
 
 ```console
-cd ~/nixos-config
+cd ~/nixos-config  # development clone, separate from the canonical checkout
 codex
 ```
 
@@ -66,7 +66,7 @@ functionality.
 
 ## Updating inputs
 
-Follow [updates.md](updates.md) for the local daily boot-only updater. Always
+Follow [updates.md](updates.md) for the root-owned canonical checkout and manual/daily updater. Always
 use explicit path flakes to include the ignored local lock. Initial activation
 and manual privileged operations require approval. Automatic updates neither
 commit nor push and never reboot.

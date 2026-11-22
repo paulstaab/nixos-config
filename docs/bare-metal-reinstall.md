@@ -125,9 +125,11 @@ resume configuration are required. This restores encrypted swap, not hibernation
 Copy the clone onto the mounted replacement:
 
 ```sh
-sudo mkdir -p /mnt/home/paul
-sudo cp -a /tmp/nixos-config /mnt/home/paul/nixos-config
-cd /mnt/home/paul/nixos-config
+sudo mkdir -p /mnt/var/lib
+sudo cp -a /tmp/nixos-config /mnt/var/lib/nixos-config
+sudo chown -R root:root /mnt/var/lib/nixos-config
+sudo chmod -R go-w /mnt/var/lib/nixos-config
+cd /mnt/var/lib/nixos-config
 ```
 
 Edit the copied files with an editor using `sudo`. UUIDs are public identifiers;
@@ -155,9 +157,9 @@ export NIX_CONFIG='experimental-features = nix-command flakes'
 git diff --check
 git diff
 rg 'c1ee8d4a-8b0e-4706-8f2d-bcc9add662e0|313af177-0457-49cd-a58e-9bf51024b8b3|D0C9-CBBD' hosts/xenon
-nix flake lock "path:$PWD"
-nix flake check "path:$PWD"
-nix build "path:$PWD#nixosConfigurations.xenon.config.system.build.toplevel"
+sudo env NIX_CONFIG="$NIX_CONFIG" nix flake lock "path:$PWD"
+sudo env NIX_CONFIG="$NIX_CONFIG" nix flake check "path:$PWD"
+sudo env NIX_CONFIG="$NIX_CONFIG" nix build "path:$PWD#nixosConfigurations.xenon.config.system.build.toplevel"
 ```
 
 The `rg` check must find no old identifiers (exit status 1 means no matches).
@@ -170,9 +172,8 @@ the lock file to work around a failure without reviewing the cause.
 After reviewing the diff and obtaining installation/bootloader-write approval:
 
 ```sh
-sudo nixos-install --root /mnt --flake path:/mnt/home/paul/nixos-config#xenon
+sudo nixos-install --root /mnt --flake path:/mnt/var/lib/nixos-config#xenon
 sudo nixos-enter --root /mnt -c 'passwd paul'
-sudo nixos-enter --root /mnt -c 'chown -R paul:users /home/paul/nixos-config'
 sudo nixos-enter --root /mnt -c 'chown paul:users /home/paul'
 ```
 
@@ -215,3 +216,7 @@ operations, credential/MFA recovery, passphrase selection, UUID editing,
 hardware changes, boot failures, and runtime acceptance. This procedure has not
 been tested end to end on a blank disk or VM; validate it in an isolated VM
 before treating it as a proven recovery path.
+
+Before enabling scheduled updates, publish replacement hardware identifiers
+through reviewed main and leave the canonical checkout clean with the HTTPS
+origin documented in [updates.md](updates.md). Stop the update timer until then.

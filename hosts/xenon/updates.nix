@@ -1,25 +1,41 @@
-{ config, ... }:
+{ pkgs, config, ... }:
 
-{
-  # Use the mutable checkout, never an immutable self.outPath store snapshot.
-  system.autoUpgrade = {
-    enable = true;
-    flake = "path:/home/paul/nixos-config#xenon";
-    operation = "boot";
-    upgrade = false;
-    allowReboot = false;
-    dates = "04:40";
-    persistent = true;
-    flags = [ "--no-update-lock-file" ];
+let
+  updater = pkgs.writeShellApplication {
+    name = "xenon-update";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.findutils
+      pkgs.gnused
+      pkgs.gitMinimal
+      pkgs.util-linux
+      config.nix.package
+      config.system.build.nixos-rebuild
+    ];
+    text = builtins.readFile ../../scripts/xenon-update;
   };
+in
+{
+  environment.systemPackages = [ updater ];
 
-  # ExecStartPre failure prevents the build. Timer and manual starts of this
-  # same oneshot service cannot overlap, including input refresh and build.
   systemd.services.nixos-upgrade = {
-    serviceConfig.WorkingDirectory = "/home/paul/nixos-config";
-    preStart = ''
-      ${config.nix.package}/bin/nix flake update --flake path:/home/paul/nixos-config
-    '';
+    description = "Refresh xenon inputs and prepare the next boot generation";
+    restartIfChanged = false;
+    unitConfig.X-StopOnRemoval = false;
+    environment.HOME = "/root";
+    wants = [ "network-online.target" ];
+    after = [ "network-online.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${updater}/bin/xenon-update daily";
+    };
+  };
+  systemd.timers.nixos-upgrade = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "04:40";
+      Persistent = true;
+    };
   };
 
   boot.loader.systemd-boot.configurationLimit = 20;

@@ -28,11 +28,11 @@ Follow [administration.md](administration.md): validation and a complete build
 must succeed, then obtain approval before temporary activation:
 
 ```sh
-sudo nixos-rebuild test --flake /home/paul/nixos-config#xenon
+sudo nixos-rebuild test --flake path:/var/lib/nixos-config#xenon
 ```
 
 Verify the applications below. Making the result persistent requires separate
-approval for `sudo nixos-rebuild switch --flake /home/paul/nixos-config#xenon`.
+approval for `sudo nixos-rebuild switch --flake path:/var/lib/nixos-config#xenon`.
 No reboot is needed to start testing; GNOME may require a new login to refresh
 application menus or integration. A temporary system activation also changes
 Home Manager files; rebooting to an older generation does not by itself undo

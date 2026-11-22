@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+fail() { echo "xenon-update: $*" >&2; exit 1; }
+[[ $EUID == 0 ]] || fail 'run with sudo'
+[[ $# == 1 ]] || fail 'usage: xenon-update boot|switch'
+case "$1" in boot|switch|daily) mode=$1 ;; *) fail 'usage: xenon-update boot|switch' ;; esac
+# daily is reserved for the systemd service: refresh inputs, then prepare boot.
+checkout=/var/lib/nixos-config
+remote=https://github.com/paulstaab/nixos-config.git
+umask 022
+exec 9>/run/lock/xenon-update.lock
+flock -n 9 || fail 'another update is running'
+[[ -d $checkout && ! -L $checkout ]] || fail "missing root-owned checkout: $checkout (see docs/updates.md)"
+[[ $(stat -c %u "$checkout") == 0 ]] || fail 'checkout must belong to root'
+[[ -z $(find "$checkout" -xdev \( ! -user root -o -perm /022 \) -print -quit) ]] || fail 'checkout contains non-root-owned or group/other-writable paths'
+cd "$checkout"
+[[ -d .git && ! -L .git ]] || fail 'expected a standalone clone'
+[[ $(git remote get-url origin) == "$remote" ]] || fail 'unexpected origin URL'
+[[ -z $(git status --porcelain --untracked-files=normal) ]] || fail 'checkout has local changes'
+# Only the local lock may be ignored: path flakes otherwise copy ignored files too.
+[[ -z $(git ls-files --others --ignored --exclude-standard | sed '/^flake\.lock$/d') ]] || fail 'unexpected ignored files in checkout'
+git -c core.hooksPath=/dev/null fetch --no-tags origin refs/heads/main
+commit=$(git rev-parse --verify 'FETCH_HEAD^{commit}')
+git -c core.hooksPath=/dev/null checkout --detach "$commit"
+echo "xenon-update: source $commit"
+flake="path:$checkout"
+if [[ $mode == daily ]]; then
+  nix flake update --flake "$flake"
+  mode=boot
+else
+  # Preserve existing pins; reconcile only changed input declarations.
+  nix flake lock "$flake"
+fi
+nix flake check --no-update-lock-file "$flake"
+built=$(nix build --no-link --print-out-paths --no-update-lock-file "$flake#nixosConfigurations.xenon.config.system.build.toplevel")
+echo "xenon-update: built $built"
+nixos-rebuild "$mode" --no-update-lock-file --flake "$flake#xenon"
+echo "xenon-update: $mode succeeded; source $commit"
+readlink -f /nix/var/nix/profiles/system

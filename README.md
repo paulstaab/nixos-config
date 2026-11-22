@@ -13,6 +13,6 @@ and [docs/recovery.md](docs/recovery.md) before activating a change.
 See [docs/desktop-applications.md](docs/desktop-applications.md) for first-run
 instructions.
 
-See [docs/updates.md](docs/updates.md) for local daily updates prepared for the
+See [docs/updates.md](docs/updates.md) for the root-owned canonical checkout, `sudo xenon-update boot` or `switch`, and daily updates prepared for the
 next manual reboot, local lock-file handling, monitoring, retention and rollback.
 See [docs/gitops.md](docs/gitops.md) for read-only GitHub PR verification.
