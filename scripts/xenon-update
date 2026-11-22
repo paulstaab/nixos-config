@@ -1,40 +1,85 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-fail() { echo "xenon-update: $*" >&2; exit 1; }
-[[ $EUID == 0 ]] || fail 'run with sudo'
-[[ $# == 1 ]] || fail 'usage: xenon-update boot|switch'
-case "$1" in boot|switch|daily) mode=$1 ;; *) fail 'usage: xenon-update boot|switch' ;; esac
-# daily is reserved for the systemd service: refresh inputs, then prepare boot.
 checkout=/var/lib/nixos-config
 remote=https://github.com/paulstaab/nixos-config.git
-umask 022
-exec 9>/run/lock/xenon-update.lock
-flock -n 9 || fail 'another update is running'
-[[ -d $checkout && ! -L $checkout ]] || fail "missing root-owned checkout: $checkout (see docs/updates.md)"
-[[ $(stat -c %u "$checkout") == 0 ]] || fail 'checkout must belong to root'
-[[ -z $(find "$checkout" -xdev \( ! -user root -o -perm /022 \) -print -quit) ]] || fail 'checkout contains non-root-owned or group/other-writable paths'
-cd "$checkout"
-[[ -d .git && ! -L .git ]] || fail 'expected a standalone clone'
-[[ $(git remote get-url origin) == "$remote" ]] || fail 'unexpected origin URL'
-[[ -z $(git status --porcelain --untracked-files=normal) ]] || fail 'checkout has local changes'
-# Only the local lock may be ignored: path flakes otherwise copy ignored files too.
-[[ -z $(git ls-files --others --ignored --exclude-standard | sed '/^flake\.lock$/d') ]] || fail 'unexpected ignored files in checkout'
-git -c core.hooksPath=/dev/null fetch --no-tags origin refs/heads/main
-commit=$(git rev-parse --verify 'FETCH_HEAD^{commit}')
-git -c core.hooksPath=/dev/null checkout --detach "$commit"
-echo "xenon-update: source $commit"
-flake="path:$checkout"
-if [[ $mode == daily ]]; then
-  nix flake update --flake "$flake"
-  mode=boot
-else
-  # Preserve existing pins; reconcile only changed input declarations.
-  nix flake lock "$flake"
-fi
-nix flake check --no-update-lock-file "$flake"
-built=$(nix build --no-link --print-out-paths --no-update-lock-file "$flake#nixosConfigurations.xenon.config.system.build.toplevel")
-echo "xenon-update: built $built"
-nixos-rebuild "$mode" --no-update-lock-file --flake "$flake#xenon"
-echo "xenon-update: $mode succeeded; source $commit"
-readlink -f /nix/var/nix/profiles/system
+
+fail() { echo "xenon-update: $*" >&2; exit 1; }
+
+# Require an explicit activation choice and root privileges before doing work.
+# The daily mode is reserved for the scheduled service and always prepares boot.
+validate_request() {
+  [[ $EUID == 0 ]] || fail 'run with sudo'
+  [[ $# == 1 ]] || fail 'usage: xenon-update boot|switch'
+  case "$1" in
+    boot|switch|daily) mode=$1 ;;
+    *) fail 'usage: xenon-update boot|switch' ;;
+  esac
+}
+
+# Hold one lock until the command exits, so manual and scheduled updates cannot
+# change the checkout, input pins or system generation concurrently.
+acquire_lock() {
+  umask 022
+  exec 9>/run/lock/xenon-update.lock
+  flock -n 9 || fail 'another update is running'
+}
+
+# Only build from the canonical root-controlled clone of the expected repository.
+# Reject local changes and extra files rather than overwriting or building them.
+validate_checkout() {
+  [[ -d $checkout && ! -L $checkout ]] || fail "missing root-owned checkout: $checkout (see docs/updates.md)"
+  [[ $(stat -c %u "$checkout") == 0 ]] || fail 'checkout must belong to root'
+  [[ -z $(find "$checkout" -xdev \( ! -user root -o -perm /022 \) -print -quit) ]] || fail 'checkout contains non-root-owned or group/other-writable paths'
+  cd "$checkout"
+  [[ -d .git && ! -L .git ]] || fail 'expected a standalone clone'
+  [[ $(git remote get-url origin) == "$remote" ]] || fail 'unexpected origin URL'
+  [[ -z $(git status --porcelain --untracked-files=normal) ]] || fail 'checkout has local changes'
+  # Path flakes include ignored files; only the machine-local lock is expected.
+  [[ -z $(git ls-files --others --ignored --exclude-standard | sed '/^flake\.lock$/d') ]] || fail 'unexpected ignored files in checkout'
+}
+
+# Fetch main once and use that exact commit, without merging local history.
+fetch_main() {
+  git -c core.hooksPath=/dev/null fetch --no-tags origin refs/heads/main
+  commit=$(git rev-parse --verify 'FETCH_HEAD^{commit}')
+  git -c core.hooksPath=/dev/null checkout --detach "$commit"
+  echo "xenon-update: source $commit"
+}
+
+# Scheduled runs refresh package inputs. Manual runs keep existing pins unless
+# changed input declarations require reconciliation. Include the ignored lock by
+# using an absolute path flake for every subsequent Nix operation.
+resolve_inputs() {
+  flake="path:$checkout"
+  if [[ $mode == daily ]]; then
+    nix flake update --flake "$flake"
+    mode=boot
+  else
+    nix flake lock "$flake"
+  fi
+}
+
+# Validate and finish the complete system build before changing the generation.
+# Freeze the resolved inputs throughout validation, building and activation.
+build_generation() {
+  nix flake check --no-update-lock-file "$flake"
+  built=$(nix build --no-link --print-out-paths --no-update-lock-file "$flake#nixosConfigurations.xenon.config.system.build.toplevel")
+  echo "xenon-update: built $built"
+}
+
+# Prepare the next boot, or also switch the running system, as requested.
+# Never reboot; report the source commit and resulting system profile instead.
+activate_generation() {
+  nixos-rebuild "$mode" --no-update-lock-file --flake "$flake#xenon"
+  echo "xenon-update: $mode succeeded; source $commit"
+  readlink -f /nix/var/nix/profiles/system
+}
+
+validate_request "$@"
+acquire_lock
+validate_checkout
+fetch_main
+resolve_inputs
+build_generation
+activate_generation
