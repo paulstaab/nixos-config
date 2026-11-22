@@ -6,7 +6,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
 
     # Keep Codex current without updating the workstation's package set.
-    codex-nixpkgs.url = "github:NixOS/nixpkgs/3730a4017d0f44c3a09faa593269bcbddae1fa18";
+    codex-nixpkgs.url = "github:NixOS/nixpkgs/93a9ed0a866099a230ed5146a5bb7d16fd5c9b14";
 
     home-manager = {
       url = "github:nix-community/home-manager/release-26.05";
