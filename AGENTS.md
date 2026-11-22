@@ -10,6 +10,13 @@ validation and builds, and create local Git commits. Prefer declarative, minimal
 reversible changes. Validate and commit configuration changes before requesting
 activation.
 
+Never commit directly on `main`. Before making changes, create or switch to a
+feature branch. Publish changes through a GitHub pull request targeting `main`;
+never push directly to `main` or bypass branch protection. A request to publish
+changes or create a PR authorizes pushing the relevant feature branch and
+opening its PR; otherwise obtain approval before pushing. Do not merge a PR
+without explicit owner approval.
+
 Explicit user approval is required before:
 
 - Activating a system configuration with `nixos-rebuild test` or `switch`.
@@ -45,7 +52,8 @@ mechanism.
 ## Required workflow
 
 1. Read this file, `README.md`, and the relevant files under `docs/`.
-2. Inspect the worktree and preserve unrelated user changes.
+2. Inspect the worktree, preserve unrelated user changes, and create or switch
+   to a feature branch before editing; never commit directly on `main`.
 3. Make the smallest declarative change that fulfills the request.
 4. For configuration changes, run parse/evaluation checks, `nix flake check path:$PWD`,
    and build `path:$PWD#nixosConfigurations.xenon.config.system.build.toplevel`.
@@ -53,6 +61,9 @@ mechanism.
 6. Confirm that a known-good system generation remains available.
 7. Stop before activation unless the owner explicitly approved activation.
 8. Document material operational decisions and recovery implications.
+9. Commit on the feature branch and submit a GitHub PR targeting `main`, obtaining
+   publication approval first unless already authorized. Keep `main` aligned
+   with the merged remote history.
 
 ## Protected configuration
 
