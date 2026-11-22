@@ -3,6 +3,8 @@
 Declarative configuration for Paul's Dell XPS 15 9530, named `xenon`. The host
 output is `nixosConfigurations.xenon`.
 
+See [docs/spec.md](docs/spec.md) for the laptop's high-level requirements.
+
 The flake builds on the graphical installer's configuration. Home Manager
 installs Paul's desktop applications and manages the default browser.
 
