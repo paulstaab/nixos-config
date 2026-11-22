@@ -10,6 +10,10 @@ flake.lock, plus manual dispatch. Lock-only events are ignored. If such a PR is
 opened despite the ignored lock policy, GitHub can leave its required check
 pending; close it rather than bypass branch protection. Mixed changes still run.
 
+Direct `scripts/gitops-ci` runs create a missing local lock before tests and
+validation, preserving existing local pins. Failure to create it stops CI with
+an explicit error.
+
 CI generates local locks, evaluates and builds base and candidate using explicit
 path flakes, compares closures, detects comparable downgrades and publishes
 configuration/service diagnostics. Unpinned base/candidate trees resolve inputs

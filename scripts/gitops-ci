@@ -14,6 +14,15 @@ if git ls-files --stage | awk '$1 == "120000" || $1 == "160000" {bad=1} END {exi
   echo 'Tracked symlinks/submodules require a separately reviewed policy.' >&2
   exit 1
 fi
+# Direct local invocations need the same bootstrap as the GitHub workflow.
+# Keep existing local pins; only resolve inputs when the lock is absent.
+if [[ ! -e flake.lock ]]; then
+  echo 'Creating missing local flake.lock for CI validation.'
+  if ! nix flake lock "path:$PWD"; then
+    echo 'Could not create local flake.lock; CI validation cannot continue.' >&2
+    exit 1
+  fi
+fi
 while IFS= read -r -d '' file; do
   case "$file" in
     *.nix)
