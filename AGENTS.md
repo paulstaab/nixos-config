@@ -89,6 +89,7 @@ Do not run the services or GC during implementation/validation.
 flake.lock is local and ignored. Always use an explicit absolute `path:` flake
 for checks/builds/rebuilds so the ignored lock is included. Preserve nixos-26.05,
 release-26.05, the separate Codex revision pin, and state versions. Daily updates
-do not commit or push. Keep the permanent checkout at /home/paul/nixos-config;
-do not point the service at a transient worktree. Review source changes before
-placing them there: the updater trusts the checkout as root code.
+do not commit or push. Keep the root-owned permanent checkout at
+/var/lib/nixos-config; do not point the service at a transient worktree. Review
+and publish source changes through main before deployment: the updater trusts
+main as root code. All updates share its lock.

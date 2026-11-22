@@ -1,143 +1,129 @@
-# Local automatic updates
+# Canonical checkout and updates
 
-The native `nixos-upgrade.service` runs daily at 04:40 Europe/Berlin. Its
-persistent timer catches missed runs after power-on. ExecStartPre first runs
-`nix flake update --flake path:/home/paul/nixos-config`; failure stops the service
-before the build. Then native nixos-rebuild runs `boot --no-update-lock-file`.
-It builds and registers the next boot generation without switching the running
-system. It never reboots. Timer and manual starts of this same service serialize;
-do not run independent rebuild/update commands concurrently.
+The canonical machine configuration is a standalone clone at
+`/var/lib/nixos-config`, owned entirely by root and not group/other writable.
+Ordinary development belongs in separate user-owned clones or worktrees. Never
+edit the canonical checkout: publish reviewed changes through a PR to `main`.
+The updater trusts that repository's main branch as root code.
 
-Nixpkgs stays on nixos-26.05 and Home Manager on release-26.05. Release upgrades
-require editing flake.nix. Codex remains explicitly pinned and does not advance
-with daily updates. No Git fetch, commit, push, PR or remote automation is used.
-A failed download/build leaves the installed generation intact; an updated lock
-may remain after failure. The next daily run retries. Bootloader installation
-errors can leave partially updated boot files and require local investigation.
-
-## Checkout and local lock
-
-The permanent checkout must be `/home/paul/nixos-config`, not a temporary agent
-worktree. Publish/copy the reviewed configuration there before enabling it. Root
-must be able to access it, including after unattended boot. This is a trusted,
-user-editable root configuration: edits there may become booted root code without
-another review. Keep the checkout free of secrets, generated reports and unrelated
-files: path flakes copy the directory to the store, including ignored files.
-
-flake.lock exists locally but is ignored by Git. Always use explicit `path:`
-flakes: a Git flake omits the ignored lock and may silently resolve other inputs.
-For interactive validation:
+## Manual command
 
 ```console
-cd /home/paul/nixos-config
-nix flake lock path:/home/paul/nixos-config
-nix flake check --no-update-lock-file path:/home/paul/nixos-config
-nix build --no-update-lock-file path:/home/paul/nixos-config#nixosConfigurations.xenon.config.system.build.toplevel
+sudo xenon-update boot
+sudo xenon-update switch
 ```
 
-There is no exact package-version recovery from Git. CI resolves a fresh lock
-for each unpinned source tree, so results can change as release branches advance.
-Never use the old Git-only maintenance workflow for this configuration.
+Choose one: `boot` prepares the next manual reboot; `switch` also activates
+immediately. Neither reboots. The command requires root and an explicit mode.
+It rejects unexpected ownership/permissions, a different origin, tracked changes,
+untracked files, or ignored files other than flake.lock. It fetches
+`https://github.com/paulstaab/nixos-config.git` main and checks out the fetched
+commit detached, without merging or discarding tracked edits. The public HTTPS
+remote requires no user SSH keys. A private repository would need a separately
+reviewed authentication arrangement.
 
-## Operation and monitoring
+Manual runs preserve the local ignored flake.lock, reconciling changed input
+declarations with `nix flake lock`. Consequently, main identifies source code,
+not exact package versions. The command prints the fetched commit, checks the
+flake, completes the system build, then runs nixos-rebuild with lock updates
+forbidden. All flake operations use an absolute `path:` reference, including the
+ignored lock. No commit, push, release upgrade or reboot is performed.
 
-After the separately approved initial activation, use:
+## Daily service and serialization
+
+`nixos-upgrade.timer` runs daily at 04:40 Europe/Berlin, catching missed runs.
+The service runs the same updater with its internal `daily` mode: fetch main,
+refresh local inputs, check/build, then prepare boot only. Nixpkgs remains on
+nixos-26.05, Home Manager on release-26.05, and Codex separately revision-pinned.
+Manual and scheduled runs hold `/run/lock/xenon-update.lock` for the entire
+operation; a competing run fails explicitly. Do not bypass this lock with
+independent rebuilds or edits in the canonical checkout.
+
+Failures before activation leave the installed generation intact, although the
+checkout and local lock may have advanced. Activation/bootloader failures can
+leave partially applied state and require investigation; there is no automatic
+health rollback. A successful build does not establish desktop/hardware behavior.
+
+## Initial migration (requires separate approval)
+
+First merge the reviewed implementation into main. Stop the old update timer
+and service before migrating; do not run either updater during implementation.
+After approval, create a fresh root-owned clone, rather than copying a user's
+Git configuration or hooks:
+
+```console
+sudo systemctl stop nixos-upgrade.timer nixos-upgrade.service
+sudo git clone --origin origin --branch main https://github.com/paulstaab/nixos-config.git /var/lib/nixos-config
+sudo chmod -R go-w /var/lib/nixos-config
+sudo install -o root -g root -m 0644 /home/paul/nixos-config/flake.lock /var/lib/nixos-config/flake.lock
+```
+
+The last command preserves existing local package pins. The old user checkout
+can remain for development; it is no longer an activation source. Validate the
+new canonical tree with `nix flake check --no-update-lock-file
+path:/var/lib/nixos-config` and a full `nix build --no-update-lock-file
+path:/var/lib/nixos-config#nixosConfigurations.xenon.config.system.build.toplevel`.
+Review the activation diff, confirm a known-good generation, then separately
+approve initial activation with `nixos-rebuild switch --no-update-lock-file
+--flake path:/var/lib/nixos-config#xenon`. This installs the command and replaces
+the old service. The persistent timer may immediately catch up.
+
+Verify checkout permissions, the installed command, generated service/timer,
+manual boot and switch modes, contention, failure handling, journal status and
+unchanged running generation after boot mode. Switching requires runtime desktop
+checks; boot behavior requires a separately approved manual reboot.
+
+## Monitoring and recovery
 
 ```console
 systemctl list-timers --all nixos-upgrade.timer nix-gc.timer
-systemctl status nixos-upgrade.timer nixos-upgrade.service
-systemctl show nixos-upgrade.service -p Result -p ExecMainStatus -p ExecMainStartTimestamp -p ExecMainExitTimestamp
+systemctl status nixos-upgrade.service
 journalctl -u nixos-upgrade.service --since '7 days ago'
-sudo systemctl start nixos-upgrade.service
 sudo nix-env --profile /nix/var/nix/profiles/system --list-generations
 readlink -f /run/current-system
 readlink -f /run/booted-system
 readlink -f /nix/var/nix/profiles/system
-bootctl status
 bootctl list
 ```
 
-The system profile names the prepared generation; `/run/current-system` names
-the activated one. `/run/booted-system` identifies the booted generation.
-Check bootctl for the actual default entry, including any manual overrides.
-Repeated identical builds need not create a distinct generation. Logs expose
-failure details; no external monitoring or custom retry loop is installed.
+The system profile names the prepared generation; current-system names the
+activated one. Booted-system identifies the booted generation. Inspect the boot
+menu/default separately. Identical builds need not create a distinct generation.
 
-## Rollback and retention
+For recovery, stop the timer/service with approval, select a known-good boot
+entry (hold Space during boot), or use an approved `nixos-rebuild boot --rollback`
+or `switch --rollback`. Inspect generations first: the previous generation may
+be an untested prepared update. Fix and merge the source before resuming updates;
+otherwise main will reintroduce the failure. See [recovery.md](recovery.md).
 
-Hold Space during boot to open systemd-boot, then choose an older NixOS entry.
-Selecting one entry boots it once; it does not necessarily reset the default.
-From a working system, with approval for the privileged change:
+Weekly native GC retains generations younger than 30 days (up to one extra
+week); systemd-boot shows at most 20 entries. Running/booted closures have GC
+roots, but old profile links and menu entries are not permanently protected.
+Pause GC during prolonged recovery if needed. No deletion occurs during validation.
 
-```console
-sudo systemctl stop nixos-upgrade.timer nixos-upgrade.service
-sudo nixos-rebuild boot --rollback
-```
-
-This changes the next boot default without switching the running system. If an
-immediate rollback is required, use `sudo nixos-rebuild switch --rollback`
-instead, after reviewing which profile generation will be selected. A prepared
-but unbooted generation means “previous” need not mean the last known-good one;
-inspect the generation list first. Reboot only manually. Keep the timer stopped
-while diagnosing; it would otherwise prepare the faulty update again. Correct
-the inputs/configuration before restarting it with `sudo systemctl start
-nixos-upgrade.timer`. See [recovery.md](recovery.md).
-
-Native weekly GC uses `--delete-older-than 30d`. This approximates 30 days (up to
-one extra week), retains current profile generations, and removes unreachable
-store paths. Running/booted system GC roots protect their store closures, but do
-not guarantee their old profile links or boot-menu entries survive indefinitely.
-Only the newest 20 generations appear in systemd-boot; profile generations and
-store paths are distinct from menu entries. Twenty daily changed generations
-may cover less than 30 days. GC does not immediately rewrite the boot menu;
-the next boot installation reconciles it. Pause `nix-gc.timer` during prolonged
-recovery if an old known-good generation must be retained. No GC or deletion is
-performed during implementation.
-
-## Reinstall and limitations
-
-Clone the repository to `/home/paul/nixos-config`, review hardware UUIDs/mounts
-for the new installation, then generate a fresh local lock with `nix flake update
---flake path:/home/paul/nixos-config`. Follow [bare-metal-reinstall.md](bare-metal-reinstall.md)
-for mounting, validation and explicitly approved installation. Use the mounted
-absolute path with `path:` before entering the installed system. Git restores
-system/user/Home Manager configuration, packages, services and these timers;
-personal files, application state and secrets require separate backups.
-
-Successful builds do not establish boot, graphics, networking, audio, suspend or
-Home Manager compatibility. Runtime verification requires approved activation
-and a manual reboot. Unattended updates trade pre-activation review for convenient
-next-boot updates. Offline periods, unavailable upstream branches, disk/ESP
-exhaustion and build failures delay updates. There is no automatic release bump,
-health rollback, firmware update or hibernation repair.
+Reinstallation uses the same root-owned path; see
+[bare-metal-reinstall.md](bare-metal-reinstall.md). Git alone cannot reproduce
+historical ignored locks. Personal state and secrets need separate backups.
 
 ## Implementation validation (2026-11-22)
 
-Validated against the existing local lock without refreshing inputs: Nix parsing
-and formatting, flake check, complete xenon build, actionlint, ShellCheck, Bash
-syntax and offline policy/downgrade fixtures passed. Full scripts/gitops-ci
-against 946b985 also passed both base/candidate checks and builds; no comparable
-downgrades were found. Reports are in `/tmp/xenon-local-updates-ci` (temporary,
-not required for recovery). Corrected service-report comparison to follow the
-top-level systemd directory symlinks; its resulting unit diff was reviewed.
+Nix parse/format checks, flake check, and a complete xenon system build passed
+using the existing local lock without refreshing inputs. Bash syntax, ShellCheck,
+and offline updater fixtures passed; CI now runs these fixtures. They cover boot,
+switch, daily refresh, bad arguments/ownership/remote/checkout state, fetch/check/
+build failure, and shared-lock contention. Fixtures mock privileged operations;
+they do not establish live activation behavior. Anonymous HTTPS access to main
+was verified without a credential helper.
 
-Inspected the generated pre-start/start scripts and timer units: input refresh
-precedes boot-only rebuild, scripts use `set -e`, the build forbids lock changes,
-and no reboot command exists. The path-flake store snapshot contains a byte-equal
-copy of the ignored local lock. Evaluated retention is 30d, weekly persistent GC,
-20 systemd-boot entries and daily persistent updates at 04:40. Calendar expressions
-were checked with systemd-analyze.
+The generated service uses the packaged updater's internal daily mode and retains
+native no-restart/no-stop-on-removal settings. Its persistent timer remains 04:40.
+Kernel, initrd and kernel parameters match running generation 10. Generations 9
+and 10 still resolve to available store paths. The build is rooted at
+`/tmp/xenon-root-updater-system`. No configuration was activated, checkout migrated,
+service started, generation removed, or change published. Live migration,
+activation, contention against the real service and runtime checks remain pending.
 
-Compared with the running generation 8: kernel, initrd and kernel parameters are
-unchanged; no storage, encryption, state-version or unrelated service setting
-changed. The closure adds git-minimal and updater/timer infrastructure. Retained
-generations 7 and 8 still resolve to existing store paths. No generation was
-removed. Native build output is rooted at `/tmp/xenon-local-updates-system`.
-
-Pending: transfer the reviewed commit into the permanent checkout, separately
-approve initial activation (which enables both persistent timers and can trigger
-catch-up runs), then verify actual update success/failure status, boot-profile
-registration and unchanged running system. Boot selection and desktop/hardware
-behavior require a separately approved manual reboot. Failure propagation is
-verified from generated units, not an injected failure on the live host. Remote
-CI/publication and cleanup execution have not been tested or performed.
+Closure comparison also includes the already configured Codex 0.167.1 to 0.171.0
+update from the existing local lock; this implementation does not change its pin.
+Activation can restart derived desktop D-Bus/polkit units as the system path
+changes, so verify desktop behavior after approved temporary activation.

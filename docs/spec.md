@@ -54,6 +54,12 @@ Implementation details and procedures belong in the linked runbooks.
 
 - Keep this repository as the source of truth for system configuration and
   managed user applications, using NixOS and Home Manager.
+- Keep the canonical machine checkout at `/var/lib/nixos-config`, owned by
+  root and not writable by ordinary users. Use separate user-owned clones or
+  worktrees for development.
+- Deploy reviewed configuration from the repository's `main` branch; reject an
+  unexpected repository, unsafe checkout permissions, or local changes rather
+  than silently overwriting them.
 - Prefer small, declarative, reviewable, reversible changes that a fresh agent
   session can understand and validate.
 - Validate configuration changes with evaluation, flake checks, and a complete
@@ -66,11 +72,27 @@ Implementation details and procedures belong in the linked runbooks.
 
 ## Updates and maintenance
 
-- Prepare local system updates daily for the next manual reboot, without
-  switching the running system or rebooting automatically.
+- Provide `sudo xenon-update boot` to prepare the next boot generation and
+  `sudo xenon-update switch` to activate immediately and persist the generation.
+  Require an explicit mode; neither mode reboots the machine.
+- Fetch the current `main` commit from the expected repository and validate and
+  completely build its configuration before changing the system generation.
+  Report the source commit and resulting system generation.
+- Prepare local system updates daily from the same canonical checkout for the
+  next manual reboot, without switching the running system or rebooting
+  automatically.
+- Serialize manual and scheduled updates across repository synchronization,
+  input resolution, validation, building, and activation.
+- Keep exact input revisions in a machine-local, Git-ignored lock file. Manual
+  updates preserve existing pins, reconciling changed input declarations only;
+  daily updates refresh inputs. Git history alone does not reproduce package
+  versions. Use absolute path flakes so operations include the local lock.
 - Stay on the selected NixOS and Home Manager release branches until a deliberate
   release upgrade; update Codex through its separate revision pin.
-- Keep routine updates local, without automatic Git commits, pushes, or PRs.
+- Fetch source updates without depending on a user's credentials. Do not
+  automatically create Git commits, pushes, or PRs during routine updates.
+- Require separately approved initial migration and activation of the updater;
+  the standing daily-update policy applies after that activation.
 - Provide inspectable update status and failure logs, and retain the installed
   generation when downloads or builds fail.
 - Perform weekly garbage collection with a 30-day threshold and retain up to

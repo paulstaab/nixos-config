@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# Offline control-flow fixtures. Root/path/ownership gates are replaced only in
+# the temporary copy; no service, system profile or real checkout is touched.
+set -euo pipefail
+repo=$(cd "$(dirname "$0")/.." && pwd)
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+export FIXTURE=$tmp
+mkdir "$tmp/bin" "$tmp/checkout"
+mkdir "$tmp/checkout/.git"
+# Match the literal root guard in the fixture copy.
+# shellcheck disable=SC2016
+sed -e '/\[\[ $EUID == 0 \]\]/d' \
+  -e "s|checkout=/var/lib/nixos-config|checkout=$tmp/checkout|" \
+  -e "s|/run/lock/xenon-update.lock|$tmp/lock|" \
+  "$repo/scripts/xenon-update" > "$tmp/updater"
+cat > "$tmp/bin/stat" <<'MOCK'
+#!/usr/bin/env bash
+echo "${OWNER:-0}"
+MOCK
+cat > "$tmp/bin/find" <<'MOCK'
+#!/usr/bin/env bash
+printf '%s' "${UNSAFE:-}"
+MOCK
+cat > "$tmp/bin/git" <<'MOCK'
+#!/usr/bin/env bash
+echo "git $*" >> "$FIXTURE/log"
+case "$*" in
+  'remote get-url origin') echo "${ORIGIN:-https://github.com/paulstaab/nixos-config.git}" ;;
+  'status --porcelain --untracked-files=normal') printf '%s' "${DIRTY:-}" ;;
+  'ls-files --others --ignored --exclude-standard') printf '%s' "${IGNORED:-flake.lock}" ;;
+  *fetch*) [[ ${FAIL:-} != fetch ]] ;;
+  'rev-parse --verify FETCH_HEAD^{commit}') echo fixture-commit ;;
+esac
+MOCK
+cat > "$tmp/bin/nix" <<'MOCK'
+#!/usr/bin/env bash
+echo "nix $*" >> "$FIXTURE/log"
+[[ ${FAIL:-} != "$1" && ${FAIL:-} != "${2:-}" ]] || exit 42
+[[ $1 != build ]] || echo /nix/store/fixture-system
+MOCK
+cat > "$tmp/bin/nixos-rebuild" <<'MOCK'
+#!/usr/bin/env bash
+echo "activate $*" >> "$FIXTURE/log"
+MOCK
+cat > "$tmp/bin/readlink" <<'MOCK'
+#!/usr/bin/env bash
+echo /nix/store/fixture-system
+MOCK
+chmod +x "$tmp/bin/"*
+export PATH="$tmp/bin:$PATH"
+run() { : > "$tmp/log"; bash "$tmp/updater" "$@" > "$tmp/output" 2>&1; }
+reject() {
+  if run "$@"; then echo 'Expected failure' >&2; exit 1; fi
+  ! grep -q '^activate ' "$tmp/log"
+}
+run boot
+grep -q '^activate boot --no-update-lock-file' "$tmp/log"
+grep -q '^nix flake lock ' "$tmp/log"
+if grep -q '^nix flake update ' "$tmp/log"; then exit 1; fi
+run switch
+grep -q '^activate switch ' "$tmp/log"
+run daily
+grep -q '^nix flake update ' "$tmp/log"
+grep -q '^activate boot ' "$tmp/log"
+reject
+reject invalid
+OWNER=1000 reject boot
+UNSAFE=unsafe reject boot
+ORIGIN=https://unexpected.invalid/repo reject boot
+DIRTY=' M flake.nix' reject boot
+IGNORED=result reject boot
+FAIL=fetch reject boot
+FAIL=flake reject boot
+FAIL=check reject boot
+FAIL=build reject switch
+# An already-held lock prevents even the fetch.
+(
+  flock -x 8
+  reject boot
+  [[ ! -s $tmp/log ]]
+) 8>"$tmp/lock"
+echo 'xenon-update offline fixtures passed'

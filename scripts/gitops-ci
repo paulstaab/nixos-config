@@ -36,6 +36,9 @@ while IFS= read -r -d '' file; do
 done < <(git ls-files -z)
 bash -n scripts/gitops-ci
 shellcheck scripts/gitops-ci
+bash -n scripts/xenon-update tests/xenon-update
+shellcheck scripts/xenon-update tests/xenon-update
+bash tests/xenon-update
 actionlint
 python3 -m py_compile scripts/gitops-lock-policy scripts/gitops-downgrades
 python3 tests/gitops-policy.py
